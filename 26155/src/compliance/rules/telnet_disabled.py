@@ -432,5 +432,3 @@ class TelnetDisabledRule(ComplianceRule):
             ],
             remediation=None,
         )
-
-

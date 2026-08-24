@@ -381,5 +381,3 @@ class SshVersionRule(ComplianceRule):
                 )
             ],
         )
-
-
