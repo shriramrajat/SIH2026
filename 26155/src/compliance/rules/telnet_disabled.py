@@ -265,8 +265,9 @@ class TelnetDisabledRule(ComplianceRule):
             return self._evaluate_juniper(config)
 
         # Vendor is listed as applicable but no handler implemented.
-        return self._needs_review_result(
+        return self._build_result(
             config=config,
+            status=ComplianceStatus.NEEDS_REVIEW,
             evidence=[
                 Evidence(
                     control_id=_CONTROL.control_id,
@@ -302,8 +303,9 @@ class TelnetDisabledRule(ComplianceRule):
         ]
 
         if not vty_sections:
-            return self._needs_review_result(
+            return self._build_result(
                 config=config,
+                status=ComplianceStatus.NEEDS_REVIEW,
                 evidence=[
                     Evidence(
                         control_id=_CONTROL.control_id,
@@ -329,7 +331,7 @@ class TelnetDisabledRule(ComplianceRule):
         all_evidence = [e for _, e in per_section]
 
         if _SEC_FAIL in verdicts:
-            return self._result_multi(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
                 evidence=all_evidence,
@@ -337,13 +339,14 @@ class TelnetDisabledRule(ComplianceRule):
             )
 
         if _SEC_NEEDS_REVIEW in verdicts:
-            return self._needs_review_result(
+            return self._build_result(
                 config=config,
+                status=ComplianceStatus.NEEDS_REVIEW,
                 evidence=all_evidence,
             )
 
         # All sections passed.
-        return self._result_multi(
+        return self._build_result(
             config=config,
             status=ComplianceStatus.PASS,
             evidence=all_evidence,
@@ -365,7 +368,7 @@ class TelnetDisabledRule(ComplianceRule):
         system = config.get_section("system")
 
         if system is None:
-            return self._result_multi(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
                 evidence=[
@@ -390,7 +393,7 @@ class TelnetDisabledRule(ComplianceRule):
         )
 
         if telnet_item is not None:
-            return self._result_multi(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
                 evidence=[
@@ -411,7 +414,7 @@ class TelnetDisabledRule(ComplianceRule):
             )
 
         # Telnet flag absent — service is not enabled.
-        return self._result_multi(
+        return self._build_result(
             config=config,
             status=ComplianceStatus.PASS,
             evidence=[
@@ -430,46 +433,4 @@ class TelnetDisabledRule(ComplianceRule):
             remediation=None,
         )
 
-    # ------------------------------------------------------------------
-    # Private result builders
-    # ------------------------------------------------------------------
 
-    def _result_multi(
-        self,
-        config: NormalizedConfig,
-        status: ComplianceStatus,
-        evidence: list[Evidence],
-        remediation: Remediation | None,
-    ) -> ComplianceResult:
-        """Build a ComplianceResult with multiple evidence records."""
-        return ComplianceResult(
-            control_id=_CONTROL.control_id,
-            control_name=_CONTROL.control_name,
-            description=_CONTROL.description,
-            severity=_CONTROL.severity,
-            status=status,
-            vendor=config.vendor,
-            hostname=config.hostname,
-            evidence=evidence,
-            remediations=[remediation] if remediation is not None else [],
-            framework_refs=list(_CONTROL.framework_refs),
-        )
-
-    def _needs_review_result(
-        self,
-        config: NormalizedConfig,
-        evidence: list[Evidence],
-    ) -> ComplianceResult:
-        """Build a NEEDS_REVIEW ComplianceResult with pre-built evidence."""
-        return ComplianceResult(
-            control_id=_CONTROL.control_id,
-            control_name=_CONTROL.control_name,
-            description=_CONTROL.description,
-            severity=_CONTROL.severity,
-            status=ComplianceStatus.NEEDS_REVIEW,
-            vendor=config.vendor,
-            hostname=config.hostname,
-            evidence=evidence,
-            remediations=[],
-            framework_refs=list(_CONTROL.framework_refs),
-        )

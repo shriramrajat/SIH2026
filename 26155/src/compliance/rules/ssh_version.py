@@ -130,15 +130,22 @@ class SshVersionRule(ComplianceRule):
             return self._evaluate_juniper(config)
 
         # Recognised as applicable but no handler implemented — be safe.
-        return self._needs_review(
+        return self._build_result(
             config=config,
-            section_name=None,
-            raw_lines=(),
-            observed=None,
-            note=(
-                f"Vendor '{config.vendor}' is listed as applicable but no "
-                "extraction handler has been implemented for SSH-001."
-            ),
+            status=ComplianceStatus.NEEDS_REVIEW,
+            evidence=[
+                Evidence(
+                    control_id=_CONTROL.control_id,
+                    section_name=None,
+                    raw_lines=(),
+                    observed=None,
+                    expected=None,
+                    note=(
+                        f"Vendor '{config.vendor}' is listed as applicable but no "
+                        "extraction handler has been implemented for SSH-001."
+                    ),
+                )
+            ],
         )
 
     # ------------------------------------------------------------------
@@ -172,20 +179,22 @@ class SshVersionRule(ComplianceRule):
 
         if ssh_item is None:
             # No SSH version directive found at all.
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name=None,
-                    raw_lines=(),
-                    observed=None,
-                    expected="ip ssh version 2",
-                    note=(
-                        "No 'ip ssh version' directive found in global "
-                        "configuration. SSH version is not explicitly set."
-                    ),
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name=None,
+                        raw_lines=(),
+                        observed=None,
+                        expected="ip ssh version 2",
+                        note=(
+                            "No 'ip ssh version' directive found in global "
+                            "configuration. SSH version is not explicitly set."
+                        ),
+                    )
+                ],
                 remediation=_CISCO_REMEDIATION,
             )
 
@@ -193,50 +202,61 @@ class SshVersionRule(ComplianceRule):
         value = ssh_item.value.lower()  # e.g. "ssh version 2"
 
         if value == "ssh version 2":
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.PASS,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name=None,
-                    raw_lines=(ssh_item.raw_line,),
-                    observed=ssh_item.value,
-                    expected="ssh version 2",
-                    note="SSH version 2 is explicitly configured globally.",
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name=None,
+                        raw_lines=(ssh_item.raw_line,),
+                        observed=ssh_item.value,
+                        expected="ssh version 2",
+                        note="SSH version 2 is explicitly configured globally.",
+                    )
+                ],
                 remediation=None,
             )
 
         if value == "ssh version 1":
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name=None,
-                    raw_lines=(ssh_item.raw_line,),
-                    observed=ssh_item.value,
-                    expected="ssh version 2",
-                    note=(
-                        f"SSH is explicitly configured for version 1 "
-                        f"('{ssh_item.raw_line.strip()}'). "
-                        "SSHv1 is cryptographically broken."
-                    ),
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name=None,
+                        raw_lines=(ssh_item.raw_line,),
+                        observed=ssh_item.value,
+                        expected="ssh version 2",
+                        note=(
+                            f"SSH is explicitly configured for version 1 "
+                            f"('{ssh_item.raw_line.strip()}'). "
+                            "SSHv1 is cryptographically broken."
+                        ),
+                    )
+                ],
                 remediation=_CISCO_REMEDIATION,
             )
 
         # Unknown value — cannot safely classify.
-        return self._needs_review(
+        return self._build_result(
             config=config,
-            section_name=None,
-            raw_lines=(ssh_item.raw_line,),
-            observed=ssh_item.value,
-            note=(
-                f"SSH version directive found ('{ssh_item.raw_line.strip()}') "
-                f"but value '{ssh_item.value}' is not a recognised version "
-                "specifier. Manual review required."
-            ),
+            status=ComplianceStatus.NEEDS_REVIEW,
+            evidence=[
+                Evidence(
+                    control_id=_CONTROL.control_id,
+                    section_name=None,
+                    raw_lines=(ssh_item.raw_line,),
+                    observed=ssh_item.value,
+                    expected=None,
+                    note=(
+                        f"SSH version directive found ('{ssh_item.raw_line.strip()}') "
+                        f"but value '{ssh_item.value}' is not a recognised version "
+                        "specifier. Manual review required."
+                    ),
+                )
+            ],
         )
 
     # ------------------------------------------------------------------
@@ -253,20 +273,22 @@ class SshVersionRule(ComplianceRule):
         system = config.get_section("system")
 
         if system is None:
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name=None,
-                    raw_lines=(),
-                    observed=None,
-                    expected="system { services { ssh { protocol-version v2; } } }",
-                    note=(
-                        "No 'system' section found in the configuration. "
-                        "Cannot determine SSH version."
-                    ),
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name=None,
+                        raw_lines=(),
+                        observed=None,
+                        expected="system { services { ssh { protocol-version v2; } } }",
+                        note=(
+                            "No 'system' section found in the configuration. "
+                            "Cannot determine SSH version."
+                        ),
+                    )
+                ],
                 remediation=_JUNIPER_REMEDIATION,
             )
 
@@ -280,123 +302,84 @@ class SshVersionRule(ComplianceRule):
         )
 
         if pv_item is None:
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name="system",
-                    raw_lines=(),
-                    observed=None,
-                    expected="protocol-version v2",
-                    note=(
-                        "'system' section exists but no 'protocol-version' "
-                        "directive was found. SSH version is not explicitly set."
-                    ),
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name="system",
+                        raw_lines=(),
+                        observed=None,
+                        expected="protocol-version v2",
+                        note=(
+                            "'system' section exists but no 'protocol-version' "
+                            "directive was found. SSH version is not explicitly set."
+                        ),
+                    )
+                ],
                 remediation=_JUNIPER_REMEDIATION,
             )
 
         value = (pv_item.value or "").lower().strip()
 
         if value == "v2":
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.PASS,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name="system",
-                    raw_lines=(pv_item.raw_line,),
-                    observed=pv_item.value,
-                    expected="v2",
-                    note="SSH protocol-version is set to 'v2' under system.",
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name="system",
+                        raw_lines=(pv_item.raw_line,),
+                        observed=pv_item.value,
+                        expected="v2",
+                        note="SSH protocol-version is set to 'v2' under system.",
+                    )
+                ],
                 remediation=None,
             )
 
         if value == "v1":
-            return self._result(
+            return self._build_result(
                 config=config,
                 status=ComplianceStatus.FAIL,
-                evidence=Evidence(
-                    control_id=_CONTROL.control_id,
-                    section_name="system",
-                    raw_lines=(pv_item.raw_line,),
-                    observed=pv_item.value,
-                    expected="v2",
-                    note=(
-                        f"SSH protocol-version is set to 'v1' "
-                        f"('{pv_item.raw_line.strip()}'). "
-                        "SSHv1 is cryptographically broken."
-                    ),
-                ),
+                evidence=[
+                    Evidence(
+                        control_id=_CONTROL.control_id,
+                        section_name="system",
+                        raw_lines=(pv_item.raw_line,),
+                        observed=pv_item.value,
+                        expected="v2",
+                        note=(
+                            f"SSH protocol-version is set to 'v1' "
+                            f"('{pv_item.raw_line.strip()}'). "
+                            "SSHv1 is cryptographically broken."
+                        ),
+                    )
+                ],
                 remediation=_JUNIPER_REMEDIATION,
             )
 
         # Unknown value.
-        return self._needs_review(
+        return self._build_result(
             config=config,
-            section_name="system",
-            raw_lines=(pv_item.raw_line,),
-            observed=pv_item.value,
-            note=(
-                f"'protocol-version' directive found "
-                f"('{pv_item.raw_line.strip()}') but value "
-                f"'{pv_item.value}' is not a recognised version specifier. "
-                "Manual review required."
-            ),
-        )
-
-    # ------------------------------------------------------------------
-    # Private result builders
-    # ------------------------------------------------------------------
-
-    def _result(
-        self,
-        config: NormalizedConfig,
-        status: ComplianceStatus,
-        evidence: Evidence,
-        remediation: Remediation | None,
-    ) -> ComplianceResult:
-        return ComplianceResult(
-            control_id=_CONTROL.control_id,
-            control_name=_CONTROL.control_name,
-            description=_CONTROL.description,
-            severity=_CONTROL.severity,
-            status=status,
-            vendor=config.vendor,
-            hostname=config.hostname,
-            evidence=[evidence],
-            remediations=[remediation] if remediation is not None else [],
-            framework_refs=list(_CONTROL.framework_refs),
-        )
-
-    def _needs_review(
-        self,
-        config: NormalizedConfig,
-        section_name: str | None,
-        raw_lines: tuple[str, ...],
-        observed: str | None,
-        note: str,
-    ) -> ComplianceResult:
-        return ComplianceResult(
-            control_id=_CONTROL.control_id,
-            control_name=_CONTROL.control_name,
-            description=_CONTROL.description,
-            severity=_CONTROL.severity,
             status=ComplianceStatus.NEEDS_REVIEW,
-            vendor=config.vendor,
-            hostname=config.hostname,
             evidence=[
                 Evidence(
                     control_id=_CONTROL.control_id,
-                    section_name=section_name,
-                    raw_lines=raw_lines,
-                    observed=observed,
+                    section_name="system",
+                    raw_lines=(pv_item.raw_line,),
+                    observed=pv_item.value,
                     expected=None,
-                    note=note,
+                    note=(
+                        f"'protocol-version' directive found "
+                        f"('{pv_item.raw_line.strip()}') but value "
+                        f"'{pv_item.value}' is not a recognised version specifier. "
+                        "Manual review required."
+                    ),
                 )
             ],
-            remediations=[],
-            framework_refs=list(_CONTROL.framework_refs),
         )
+
+

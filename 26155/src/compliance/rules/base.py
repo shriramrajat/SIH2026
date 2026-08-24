@@ -97,14 +97,9 @@ class ComplianceRule(abc.ABC):
 
     def _not_applicable(self, config: NormalizedConfig) -> ComplianceResult:
         """Produce a NOT_APPLICABLE result for *config*."""
-        return ComplianceResult(
-            control_id=self.control.control_id,
-            control_name=self.control.control_name,
-            description=self.control.description,
-            severity=self.control.severity,
+        return self._build_result(
+            config=config,
             status=ComplianceStatus.NOT_APPLICABLE,
-            vendor=config.vendor,
-            hostname=config.hostname,
             evidence=[
                 Evidence(
                     control_id=self.control.control_id,
@@ -118,6 +113,26 @@ class ComplianceRule(abc.ABC):
                     ),
                 )
             ],
-            remediations=[],
+            remediation=None,
+        )
+
+    def _build_result(
+        self,
+        config: NormalizedConfig,
+        status: ComplianceStatus,
+        evidence: list[Evidence],
+        remediation: Remediation | None = None,
+    ) -> ComplianceResult:
+        """Construct a ComplianceResult with standard metadata."""
+        return ComplianceResult(
+            control_id=self.control.control_id,
+            control_name=self.control.control_name,
+            description=self.control.description,
+            severity=self.control.severity,
+            status=status,
+            vendor=config.vendor,
+            hostname=config.hostname,
+            evidence=evidence,
+            remediations=[remediation] if remediation is not None else [],
             framework_refs=list(self.control.framework_refs),
         )
