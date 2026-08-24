@@ -20,6 +20,11 @@ from test_scanner import (
     test_line_numbers_and_snippets,
     test_clean_code_false_positives,
     test_full_directory_scan,
+    test_deterministic_asset_id,
+    test_path_normalization,
+    test_structured_evidence,
+    test_language_exposure,
+    test_comment_filtering,
 )
 
 
@@ -47,6 +52,21 @@ class TestECDATScanner(unittest.TestCase):
 
     def test_08_full_directory_scan(self):
         test_full_directory_scan()
+
+    def test_09_deterministic_asset_id(self):
+        test_deterministic_asset_id()
+
+    def test_10_path_normalization(self):
+        test_path_normalization()
+
+    def test_11_structured_evidence(self):
+        test_structured_evidence()
+
+    def test_12_language_exposure(self):
+        test_language_exposure()
+
+    def test_13_comment_filtering(self):
+        test_comment_filtering()
 
 
 if __name__ == "__main__":

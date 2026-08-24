@@ -3,14 +3,16 @@ Python AST Visitor Engine for Deep Cryptographic Code Analysis.
 """
 
 import ast
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Union
 from ecdat.models import CryptoAsset
 
 
 class PythonASTScanner(ast.NodeVisitor):
-    def __init__(self, file_path: str, source_lines: List[str]):
+    def __init__(self, file_path: str, source_lines: List[str], root_dir: Optional[Union[str, Path]] = None):
         self.file_path = file_path
         self.source_lines = source_lines
+        self.root_dir = root_dir
         self.assets: List[CryptoAsset] = []
 
     def _get_snippet(self, lineno: int) -> str:
@@ -43,7 +45,11 @@ class PythonASTScanner(ast.NodeVisitor):
                         code_snippet=snippet,
                         library="PyCryptodome",
                         confidence=confidence,
+                        language="python",
+                        detection_mechanism="ast",
+                        matched_rule_id="py-ast-rsa-gen",
                         key_length=key_length,
+                        root_dir=self.root_dir,
                     )
                 )
 
@@ -71,7 +77,11 @@ class PythonASTScanner(ast.NodeVisitor):
                         code_snippet=snippet,
                         library="PyCryptodome",
                         confidence=confidence,
+                        language="python",
+                        detection_mechanism="ast",
+                        matched_rule_id="py-ast-aes-new",
                         mode=mode,
+                        root_dir=self.root_dir,
                     )
                 )
 
@@ -97,6 +107,10 @@ class PythonASTScanner(ast.NodeVisitor):
                             code_snippet=snippet,
                             library="cryptography",
                             confidence=0.95,
+                            language="python",
+                            detection_mechanism="ast",
+                            matched_rule_id=f"py-ast-cryptography-{algo_name.lower()}",
+                            root_dir=self.root_dir,
                         )
                     )
 
@@ -121,6 +135,10 @@ class PythonASTScanner(ast.NodeVisitor):
                             code_snippet=snippet,
                             library="hashlib",
                             confidence=0.95,
+                            language="python",
+                            detection_mechanism="ast",
+                            matched_rule_id=f"py-ast-hashlib-{algo_name}",
+                            root_dir=self.root_dir,
                         )
                     )
 
@@ -128,7 +146,11 @@ class PythonASTScanner(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def scan_python_ast(file_path: str, source_code: str) -> List[CryptoAsset]:
+def scan_python_ast(
+    file_path: str,
+    source_code: str,
+    root_dir: Optional[Union[str, Path]] = None,
+) -> List[CryptoAsset]:
     """Parse Python code using ast module and return list of CryptoAssets."""
     try:
         tree = ast.parse(source_code, filename=file_path)
@@ -136,6 +158,6 @@ def scan_python_ast(file_path: str, source_code: str) -> List[CryptoAsset]:
         return []
 
     lines = source_code.splitlines()
-    visitor = PythonASTScanner(file_path, lines)
+    visitor = PythonASTScanner(file_path, lines, root_dir=root_dir)
     visitor.visit(tree)
     return visitor.assets

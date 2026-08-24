@@ -140,3 +140,138 @@ def test_full_directory_scan():
     assert "asset_id" in asset_dict
     assert "algorithm" in asset_dict
     assert "confidence" in asset_dict
+    assert "evidence" in asset_dict
+    assert "language" in asset_dict
+
+
+def test_deterministic_asset_id():
+    scanner = Scanner()
+    python_file = FIXTURES_DIR / "sample_python.py"
+    assets_run1 = scanner.scan_file(python_file)
+    assets_run2 = scanner.scan_file(python_file)
+
+    # 1. Stability across runs
+    assert len(assets_run1) == len(assets_run2)
+    for a1, a2 in zip(assets_run1, assets_run2):
+        assert a1.asset_id == a2.asset_id
+        assert a1.asset_id.startswith("crypto-")
+
+    # 2. Same input -> same asset_id
+    a1 = assets_run1[0]
+    a1_clone = CryptoAsset.create(
+        name=a1.name,
+        category=a1.category,
+        algorithm=a1.algorithm,
+        file_path=a1.file_path,
+        line_number=a1.line_number,
+        code_snippet=a1.code_snippet,
+        library=a1.library,
+        confidence=a1.confidence,
+        language=a1.language,
+        detection_mechanism=a1.evidence.detection_mechanism,
+        matched_rule_id=a1.evidence.matched_rule_id,
+    )
+    assert a1.asset_id == a1_clone.asset_id
+
+    # 3. Different line -> different asset_id
+    a_diff_line = CryptoAsset.create(
+        name=a1.name,
+        category=a1.category,
+        algorithm=a1.algorithm,
+        file_path=a1.file_path,
+        line_number=a1.line_number + 100,
+        code_snippet=a1.code_snippet,
+        library=a1.library,
+        confidence=a1.confidence,
+        language=a1.language,
+        detection_mechanism=a1.evidence.detection_mechanism,
+        matched_rule_id=a1.evidence.matched_rule_id,
+    )
+    assert a1.asset_id != a_diff_line.asset_id
+
+    # 4. Different algorithm -> different asset_id
+    a_diff_algo = CryptoAsset.create(
+        name=a1.name,
+        category=a1.category,
+        algorithm="DIFFERENT_ALGO",
+        file_path=a1.file_path,
+        line_number=a1.line_number,
+        code_snippet=a1.code_snippet,
+        library=a1.library,
+        confidence=a1.confidence,
+        language=a1.language,
+        detection_mechanism=a1.evidence.detection_mechanism,
+        matched_rule_id=a1.evidence.matched_rule_id,
+    )
+    assert a1.asset_id != a_diff_algo.asset_id
+
+
+def test_path_normalization():
+    scanner = Scanner()
+    assets = scanner.scan(FIXTURES_DIR)
+    for asset in assets:
+        # Must not contain absolute Windows/Linux prefixes
+        assert not asset.file_path.startswith("C:")
+        assert not asset.file_path.startswith("c:")
+        assert not asset.file_path.startswith("/home/")
+        # Must use forward slashes
+        assert "\\" not in asset.file_path
+
+
+def test_structured_evidence():
+    scanner = Scanner()
+    python_file = FIXTURES_DIR / "sample_python.py"
+    assets = scanner.scan_file(python_file)
+
+    for asset in assets:
+        assert asset.evidence is not None
+        assert isinstance(asset.evidence.code_snippet, str)
+        assert len(asset.evidence.code_snippet) > 0
+        assert asset.evidence.detection_mechanism in ["ast", "regex", "pem_header"]
+        assert isinstance(asset.evidence.matched_rule_id, str)
+        # Property compatibility check
+        assert asset.code_snippet == asset.evidence.code_snippet
+
+
+def test_language_exposure():
+    scanner = Scanner()
+    python_assets = scanner.scan_file(FIXTURES_DIR / "sample_python.py")
+    assert all(a.language == "python" for a in python_assets)
+
+    java_assets = scanner.scan_file(FIXTURES_DIR / "sample_java.java")
+    assert all(a.language == "java" for a in java_assets)
+
+    c_assets = scanner.scan_file(FIXTURES_DIR / "sample_c.c")
+    assert all(a.language == "c" for a in c_assets)
+
+    pem_assets = scanner.scan_file(FIXTURES_DIR / "sample_keys.pem")
+    assert all(a.language == "pem" for a in pem_assets)
+
+
+def test_comment_filtering():
+    scanner = Scanner()
+
+    # Python commented code check
+    py_assets = scanner.scan_file(FIXTURES_DIR / "commented_code.py")
+    py_algos = {a.algorithm for a in py_assets}
+    assert len(py_assets) == 2
+    assert "SHA-256" in py_algos
+    assert "SHA-512" in py_algos
+    assert "MD5" not in py_algos
+    assert "RSA" not in py_algos
+
+    # Java commented code check
+    java_assets = scanner.scan_file(FIXTURES_DIR / "commented_java.java")
+    assert len(java_assets) == 1
+    assert java_assets[0].algorithm == "AES"
+    assert "AES/GCM/NoPadding" in java_assets[0].code_snippet
+    assert not any("AES/CBC/PKCS5Padding" in a.code_snippet for a in java_assets)
+    assert not any("DES/ECB/PKCS5Padding" in a.code_snippet for a in java_assets)
+
+    # C commented code check
+    c_assets = scanner.scan_file(FIXTURES_DIR / "commented_c.c")
+    assert len(c_assets) == 1
+    assert c_assets[0].algorithm == "AES"
+    assert "EVP_aes_256_gcm" in c_assets[0].code_snippet
+    assert not any("EVP_aes_128_cbc" in a.code_snippet for a in c_assets)
+    assert not any("EVP_md5" in a.code_snippet for a in c_assets)
