@@ -140,6 +140,7 @@ def test_full_directory_scan():
     assert "asset_id" in asset_dict
     assert "algorithm" in asset_dict
     assert "confidence" in asset_dict
+<<<<<<< HEAD
     assert "evidence" in asset_dict
     assert "language" in asset_dict
 
@@ -275,3 +276,5 @@ def test_comment_filtering():
     assert "EVP_aes_256_gcm" in c_assets[0].code_snippet
     assert not any("EVP_aes_128_cbc" in a.code_snippet for a in c_assets)
     assert not any("EVP_md5" in a.code_snippet for a in c_assets)
+=======
+>>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59

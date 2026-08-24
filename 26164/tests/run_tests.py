@@ -20,11 +20,14 @@ from test_scanner import (
     test_line_numbers_and_snippets,
     test_clean_code_false_positives,
     test_full_directory_scan,
+<<<<<<< HEAD
     test_deterministic_asset_id,
     test_path_normalization,
     test_structured_evidence,
     test_language_exposure,
     test_comment_filtering,
+=======
+>>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
 )
 
 
@@ -53,6 +56,7 @@ class TestECDATScanner(unittest.TestCase):
     def test_08_full_directory_scan(self):
         test_full_directory_scan()
 
+<<<<<<< HEAD
     def test_09_deterministic_asset_id(self):
         test_deterministic_asset_id()
 
@@ -68,6 +72,8 @@ class TestECDATScanner(unittest.TestCase):
     def test_13_comment_filtering(self):
         test_comment_filtering()
 
+=======
+>>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
