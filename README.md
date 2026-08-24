@@ -173,13 +173,15 @@ AI-Driven Multi-Vendor Network Security Compliance Auditor
 
 ### PS 26164
 Enterprise Cryptographic Discovery & Analysis Tool
-**Status:** Active
-
-### PS 26100
-AI-Powered Integrated Bid Compliance Verification Platform
 **Status:** Active — Secondary
 
 ## Dropped Problem Statements
+
+### PS 26100
+AI-Powered Integrated Bid Compliance Verification Platform
+**Status:** Dropped
+
+**Reason:** The team can pursue a maximum of two PS. PS 26155 + PS 26164 provide a stronger complementary cybersecurity-focused portfolio and better technical coherence. (Note: The deterministic compliance core of 26100 was already implemented, but we dropped it for strategic portfolio consolidation).
 
 ### PS 26103
 Web-Based Integrated Project Monitoring Platform

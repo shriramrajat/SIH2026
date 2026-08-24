@@ -29,13 +29,9 @@ Responsibilities:
 
 ### PS 26164
 **Rohan — `rskusalkar78`**
-
-Enterprise Cryptographic Discovery & Analysis Tool (ECDAT)
-
-### PS 26100
 **Matin — `shaikhmatin723-blip`**
 
-AI-Powered Integrated Bid Compliance Verification Platform for GeM Procurement
+Enterprise Cryptographic Discovery & Analysis Tool (ECDAT)
 
 ### PS 26155
 **Rajat — `shriramrajat`**
@@ -59,6 +55,4 @@ The repository contains four primary POC branches:
 main
 │
 ├── poc/26155
-├── poc/26164
-├── poc/26100
-└── poc/26103
+└── poc/26164
