@@ -165,8 +165,24 @@ The CareerOS repository contains the broader SIH planning and execution document
 
 ## Current Status
 
-**Phase:** Day 0 — Team & Repository Setup
+## Active Problem Statements
 
-**Day 1:** Not started.
+### PS 26155
+AI-Driven Multi-Vendor Network Security Compliance Auditor
+**Status:** Active — Flagship
 
-No project implementation should begin until the team receives the Day 1 instructions.
+### PS 26164
+Enterprise Cryptographic Discovery & Analysis Tool
+**Status:** Active
+
+### PS 26100
+AI-Powered Integrated Bid Compliance Verification Platform
+**Status:** Active — Secondary
+
+## Dropped Problem Statements
+
+### PS 26103
+Web-Based Integrated Project Monitoring Platform
+**Status:** Dropped
+
+**Reason:** Team can pursue a maximum of two PS for the final SIH submission. PS 26103 has the least technical progress and lowest strategic differentiation, so development is discontinued.
