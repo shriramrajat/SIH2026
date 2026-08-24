@@ -25,6 +25,7 @@ from test_scanner import (
     test_structured_evidence,
     test_language_exposure,
     test_comment_filtering,
+<<<<<<< HEAD
     test_detection_matrix_core_language_capabilities,
     test_hardcoded_secret_detection_and_redaction,
     test_key_like_strings_are_not_false_positives,
@@ -32,6 +33,8 @@ from test_scanner import (
     test_comment_markers_inside_strings_do_not_hide_active_code,
     test_malformed_source_does_not_abort_regex_detection,
     test_detected_assets_include_required_evidence_fields,
+=======
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
 )
 
 
@@ -75,6 +78,7 @@ class TestECDATScanner(unittest.TestCase):
     def test_13_comment_filtering(self):
         test_comment_filtering()
 
+<<<<<<< HEAD
     def test_14_detection_matrix_core_language_capabilities(self):
         test_detection_matrix_core_language_capabilities()
 
@@ -96,6 +100,8 @@ class TestECDATScanner(unittest.TestCase):
     def test_20_detected_assets_include_required_evidence_fields(self):
         test_detected_assets_include_required_evidence_fields()
 
+=======
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

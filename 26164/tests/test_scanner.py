@@ -284,6 +284,7 @@ def test_comment_filtering():
     assert "EVP_aes_256_gcm" in c_assets[0].code_snippet
     assert not any("EVP_aes_128_cbc" in a.code_snippet for a in c_assets)
     assert not any("EVP_md5" in a.code_snippet for a in c_assets)
+<<<<<<< HEAD
 
 
 def test_detection_matrix_core_language_capabilities():
@@ -608,3 +609,5 @@ def test_detected_assets_include_required_evidence_fields():
         assert asset.evidence.code_snippet
         assert asset.evidence.detection_mechanism in {"ast", "regex", "pem_header"}
         assert asset.evidence.matched_rule_id
+=======
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)

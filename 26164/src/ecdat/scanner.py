@@ -33,7 +33,11 @@ SUPPORTED_EXTENSIONS: Set[str] = {".py", ".java", ".c", ".cpp", ".h", ".hpp", ".
 def strip_comments_from_lines(content_lines: List[str], language: str) -> List[str]:
     """
     Strips single-line and multi-line comments from code lines while preserving
+<<<<<<< HEAD
     line positions and line count. Does not build a full language parser.
+=======
+    line positions and line count.
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
     """
     cleaned_lines = []
     in_block_comment = False
@@ -66,8 +70,11 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
             current_chars = list(line)
             i = 0
             n = len(current_chars)
+<<<<<<< HEAD
             quote_char = None
             escaped = False
+=======
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
             while i < n:
                 if in_block_comment:
                     if i + 1 < n and current_chars[i] == '*' and current_chars[i + 1] == '/':
@@ -79,6 +86,7 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
                         current_chars[i] = ' '
                         i += 1
                 else:
+<<<<<<< HEAD
                     ch = current_chars[i]
                     if quote_char:
                         if escaped:
@@ -92,6 +100,9 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
                         quote_char = ch
                         i += 1
                     elif i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
+=======
+                    if i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
                         current_chars[i] = ' '
                         current_chars[i + 1] = ' '
                         in_block_comment = True
@@ -109,6 +120,7 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
     return cleaned_lines
 
 
+<<<<<<< HEAD
 def _string_literal_masks(content_lines: List[str], language: str) -> List[List[bool]]:
     """Build per-line masks for string literal regions, preserving column positions."""
     if language == "pem":
@@ -181,6 +193,10 @@ class Scanner:
         ignored_dirs: Optional[Set[str]] = None,
         root_dir: Optional[Union[str, Path]] = None,
     ):
+=======
+class Scanner:
+    def __init__(self, ignored_dirs: Optional[Set[str]] = None, root_dir: Optional[Union[str, Path]] = None):
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
         self.ignored_dirs = ignored_dirs or DEFAULT_IGNORED_DIRS
         self.root_dir = root_dir
 
@@ -234,12 +250,17 @@ class Scanner:
         effective_root = root_dir or self.root_dir
 
         cleaned_lines = strip_comments_from_lines(content_lines, language)
+<<<<<<< HEAD
         string_masks = _string_literal_masks(cleaned_lines, language)
 
         for idx, (original_line, search_line, string_mask) in enumerate(
             zip(content_lines, cleaned_lines, string_masks),
             start=1,
         ):
+=======
+
+        for idx, (original_line, search_line) in enumerate(zip(content_lines, cleaned_lines), start=1):
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
             stripped_search = search_line.strip()
             if not stripped_search:
                 continue
@@ -251,6 +272,7 @@ class Scanner:
                     if not (rule.language == "c" and language == "cpp"):
                         continue
 
+<<<<<<< HEAD
                 match = None
                 for candidate in rule.pattern.finditer(search_line):
                     if candidate.start() < len(string_mask) and string_mask[candidate.start()]:
@@ -258,6 +280,9 @@ class Scanner:
                     match = candidate
                     break
 
+=======
+                match = rule.pattern.search(search_line)
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
                 if match:
                     algorithm = rule.algorithm
                     category = rule.category
@@ -267,6 +292,7 @@ class Scanner:
                     padding = rule.padding
                     confidence = rule.confidence
                     detection_mechanism = "pem_header" if library == "PEM" else "regex"
+<<<<<<< HEAD
                     code_snippet = original_line.strip()
 
                     if rule.secret_name_group and rule.secret_value_group:
@@ -275,6 +301,8 @@ class Scanner:
                         if not is_hardcoded_secret_candidate(identifier, literal_value):
                             continue
                         code_snippet = redact_secret_literal(code_snippet)
+=======
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
 
                     # Dynamic parsing for Java rules
                     if rule.rule_id == "java-cipher-instance":
@@ -314,7 +342,11 @@ class Scanner:
                         algorithm=algorithm,
                         file_path=str(file_path),
                         line_number=idx,
+<<<<<<< HEAD
                         code_snippet=code_snippet,
+=======
+                        code_snippet=original_line.strip(),
+>>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
                         library=library,
                         confidence=confidence,
                         language=language,
