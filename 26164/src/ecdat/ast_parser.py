@@ -3,26 +3,16 @@ Python AST Visitor Engine for Deep Cryptographic Code Analysis.
 """
 
 import ast
-<<<<<<< HEAD
 from pathlib import Path
 from typing import List, Optional, Union
-=======
-from typing import List, Optional
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
 from ecdat.models import CryptoAsset
 
 
 class PythonASTScanner(ast.NodeVisitor):
-<<<<<<< HEAD
     def __init__(self, file_path: str, source_lines: List[str], root_dir: Optional[Union[str, Path]] = None):
         self.file_path = file_path
         self.source_lines = source_lines
         self.root_dir = root_dir
-=======
-    def __init__(self, file_path: str, source_lines: List[str]):
-        self.file_path = file_path
-        self.source_lines = source_lines
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
         self.assets: List[CryptoAsset] = []
 
     def _get_snippet(self, lineno: int) -> str:
@@ -55,15 +45,11 @@ class PythonASTScanner(ast.NodeVisitor):
                         code_snippet=snippet,
                         library="PyCryptodome",
                         confidence=confidence,
-<<<<<<< HEAD
                         language="python",
                         detection_mechanism="ast",
                         matched_rule_id="py-ast-rsa-gen",
                         key_length=key_length,
                         root_dir=self.root_dir,
-=======
-                        key_length=key_length,
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                     )
                 )
 
@@ -91,15 +77,11 @@ class PythonASTScanner(ast.NodeVisitor):
                         code_snippet=snippet,
                         library="PyCryptodome",
                         confidence=confidence,
-<<<<<<< HEAD
                         language="python",
                         detection_mechanism="ast",
                         matched_rule_id="py-ast-aes-new",
                         mode=mode,
                         root_dir=self.root_dir,
-=======
-                        mode=mode,
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                     )
                 )
 
@@ -125,13 +107,10 @@ class PythonASTScanner(ast.NodeVisitor):
                             code_snippet=snippet,
                             library="cryptography",
                             confidence=0.95,
-<<<<<<< HEAD
                             language="python",
                             detection_mechanism="ast",
                             matched_rule_id=f"py-ast-cryptography-{algo_name.lower()}",
                             root_dir=self.root_dir,
-=======
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                         )
                     )
 
@@ -156,13 +135,10 @@ class PythonASTScanner(ast.NodeVisitor):
                             code_snippet=snippet,
                             library="hashlib",
                             confidence=0.95,
-<<<<<<< HEAD
                             language="python",
                             detection_mechanism="ast",
                             matched_rule_id=f"py-ast-hashlib-{algo_name}",
                             root_dir=self.root_dir,
-=======
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                         )
                     )
 
@@ -170,11 +146,11 @@ class PythonASTScanner(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-<<<<<<< HEAD
-def scan_python_ast(file_path: str, source_code: str, root_dir: Optional[Union[str, Path]] = None) -> List[CryptoAsset]:
-=======
-def scan_python_ast(file_path: str, source_code: str) -> List[CryptoAsset]:
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
+def scan_python_ast(
+    file_path: str,
+    source_code: str,
+    root_dir: Optional[Union[str, Path]] = None,
+) -> List[CryptoAsset]:
     """Parse Python code using ast module and return list of CryptoAssets."""
     try:
         tree = ast.parse(source_code, filename=file_path)
@@ -182,10 +158,6 @@ def scan_python_ast(file_path: str, source_code: str) -> List[CryptoAsset]:
         return []
 
     lines = source_code.splitlines()
-<<<<<<< HEAD
     visitor = PythonASTScanner(file_path, lines, root_dir=root_dir)
-=======
-    visitor = PythonASTScanner(file_path, lines)
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
     visitor.visit(tree)
     return visitor.assets

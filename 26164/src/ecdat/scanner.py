@@ -25,11 +25,10 @@ DEFAULT_IGNORED_DIRS: Set[str] = {
 SUPPORTED_EXTENSIONS: Set[str] = {".py", ".java", ".c", ".cpp", ".h", ".hpp", ".pem", ".crt", ".key"}
 
 
-<<<<<<< HEAD
 def strip_comments_from_lines(content_lines: List[str], language: str) -> List[str]:
     """
     Strips single-line and multi-line comments from code lines while preserving
-    line positions and line count.
+    line positions and line count. Does not build a full language parser.
     """
     cleaned_lines = []
     in_block_comment = False
@@ -92,14 +91,13 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
 
 
 class Scanner:
-    def __init__(self, ignored_dirs: Optional[Set[str]] = None, root_dir: Optional[Union[str, Path]] = None):
+    def __init__(
+        self,
+        ignored_dirs: Optional[Set[str]] = None,
+        root_dir: Optional[Union[str, Path]] = None,
+    ):
         self.ignored_dirs = ignored_dirs or DEFAULT_IGNORED_DIRS
         self.root_dir = root_dir
-=======
-class Scanner:
-    def __init__(self, ignored_dirs: Optional[Set[str]] = None):
-        self.ignored_dirs = ignored_dirs or DEFAULT_IGNORED_DIRS
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
 
     def discover_files(self, root_path: Union[str, Path]) -> List[Path]:
         """Recursively discover supported source files while respecting ignore list."""
@@ -135,7 +133,6 @@ class Scanner:
             return "c"
         elif ext in [".cpp", ".hpp"]:
             return "cpp"
-<<<<<<< HEAD
         elif ext in [".pem", ".crt", ".key"]:
             return "pem"
         return "all"
@@ -156,19 +153,6 @@ class Scanner:
         for idx, (original_line, search_line) in enumerate(zip(content_lines, cleaned_lines), start=1):
             stripped_search = search_line.strip()
             if not stripped_search:
-=======
-        return "all"
-
-    def scan_file_regex(self, file_path: Path, content_lines: List[str]) -> List[CryptoAsset]:
-        """Scan file content using regular expression rules."""
-        language = self._determine_language(file_path)
-        assets: List[CryptoAsset] = []
-
-        for idx, line in enumerate(content_lines, start=1):
-            stripped_line = line.strip()
-            # Skip empty lines or pure single-line comments for performance
-            if not stripped_line:
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                 continue
 
             for rule in REGEX_RULES:
@@ -178,11 +162,7 @@ class Scanner:
                     if not (rule.language == "c" and language == "cpp"):
                         continue
 
-<<<<<<< HEAD
                 match = rule.pattern.search(search_line)
-=======
-                match = rule.pattern.search(line)
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                 if match:
                     algorithm = rule.algorithm
                     category = rule.category
@@ -191,10 +171,7 @@ class Scanner:
                     mode = rule.mode
                     padding = rule.padding
                     confidence = rule.confidence
-<<<<<<< HEAD
                     detection_mechanism = "pem_header" if library == "PEM" else "regex"
-=======
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
 
                     # Dynamic parsing for Java rules
                     if rule.rule_id == "java-cipher-instance":
@@ -234,7 +211,6 @@ class Scanner:
                         algorithm=algorithm,
                         file_path=str(file_path),
                         line_number=idx,
-<<<<<<< HEAD
                         code_snippet=original_line.strip(),
                         library=library,
                         confidence=confidence,
@@ -245,20 +221,11 @@ class Scanner:
                         mode=mode,
                         padding=padding,
                         root_dir=effective_root,
-=======
-                        code_snippet=stripped_line,
-                        library=library,
-                        confidence=confidence,
-                        key_length=key_length,
-                        mode=mode,
-                        padding=padding,
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
                     )
                     assets.append(asset)
 
         return assets
 
-<<<<<<< HEAD
     def scan_file(
         self,
         file_path: Path,
@@ -266,10 +233,6 @@ class Scanner:
     ) -> List[CryptoAsset]:
         """Perform full scan on a single file combining AST and Regex detection."""
         effective_root = root_dir or self.root_dir
-=======
-    def scan_file(self, file_path: Path) -> List[CryptoAsset]:
-        """Perform full scan on a single file combining AST and Regex detection."""
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
@@ -279,19 +242,11 @@ class Scanner:
         lines = content.splitlines()
         language = self._determine_language(file_path)
 
-<<<<<<< HEAD
         regex_assets = self.scan_file_regex(file_path, lines, root_dir=effective_root)
 
         # Run AST parser for Python files
         if language == "python":
             ast_assets = scan_python_ast(str(file_path), content, root_dir=effective_root)
-=======
-        regex_assets = self.scan_file_regex(file_path, lines)
-
-        # Run AST parser for Python files
-        if language == "python":
-            ast_assets = scan_python_ast(str(file_path), content)
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
 
             # Deduplicate / merge AST and Regex hits on the same line and algorithm
             ast_lines_algos = {(a.line_number, a.algorithm) for a in ast_assets}
@@ -304,20 +259,13 @@ class Scanner:
 
     def scan(self, target_path: Union[str, Path]) -> List[CryptoAsset]:
         """Scan target directory or file and return normalized CryptoAssets."""
-<<<<<<< HEAD
         target = Path(target_path)
         effective_root = self.root_dir or (target if target.is_dir() else target.parent)
-=======
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
         files = self.discover_files(target_path)
         all_assets: List[CryptoAsset] = []
 
         for file_path in files:
-<<<<<<< HEAD
             file_assets = self.scan_file(file_path, root_dir=effective_root)
-=======
-            file_assets = self.scan_file(file_path)
->>>>>>> 5c11a7e12e1ec992413798931d022090476d8a59
             all_assets.extend(file_assets)
 
         return all_assets
