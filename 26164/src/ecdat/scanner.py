@@ -28,7 +28,7 @@ SUPPORTED_EXTENSIONS: Set[str] = {".py", ".java", ".c", ".cpp", ".h", ".hpp", ".
 def strip_comments_from_lines(content_lines: List[str], language: str) -> List[str]:
     """
     Strips single-line and multi-line comments from code lines while preserving
-    line positions and line count.
+    line positions and line count. Does not build a full language parser.
     """
     cleaned_lines = []
     in_block_comment = False
@@ -91,7 +91,11 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
 
 
 class Scanner:
-    def __init__(self, ignored_dirs: Optional[Set[str]] = None, root_dir: Optional[Union[str, Path]] = None):
+    def __init__(
+        self,
+        ignored_dirs: Optional[Set[str]] = None,
+        root_dir: Optional[Union[str, Path]] = None,
+    ):
         self.ignored_dirs = ignored_dirs or DEFAULT_IGNORED_DIRS
         self.root_dir = root_dir
 

@@ -146,7 +146,11 @@ class PythonASTScanner(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def scan_python_ast(file_path: str, source_code: str, root_dir: Optional[Union[str, Path]] = None) -> List[CryptoAsset]:
+def scan_python_ast(
+    file_path: str,
+    source_code: str,
+    root_dir: Optional[Union[str, Path]] = None,
+) -> List[CryptoAsset]:
     """Parse Python code using ast module and return list of CryptoAssets."""
     try:
         tree = ast.parse(source_code, filename=file_path)
