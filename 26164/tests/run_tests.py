@@ -25,13 +25,12 @@ from test_scanner import (
     test_structured_evidence,
     test_language_exposure,
     test_comment_filtering,
-    test_detection_matrix_core_language_capabilities,
-    test_hardcoded_secret_detection_and_redaction,
-    test_key_like_strings_are_not_false_positives,
-    test_dynamic_generated_values_are_not_hardcoded_secrets,
-    test_comment_markers_inside_strings_do_not_hide_active_code,
-    test_malformed_source_does_not_abort_regex_detection,
-    test_detected_assets_include_required_evidence_fields,
+    test_matrix_python,
+    test_matrix_java,
+    test_matrix_c,
+    test_matrix_pem,
+    test_negative_cases,
+    test_deduplication_and_edge_cases,
 )
 
 
@@ -75,26 +74,23 @@ class TestECDATScanner(unittest.TestCase):
     def test_13_comment_filtering(self):
         test_comment_filtering()
 
-    def test_14_detection_matrix_core_language_capabilities(self):
-        test_detection_matrix_core_language_capabilities()
+    def test_14_matrix_python(self):
+        test_matrix_python()
 
-    def test_15_hardcoded_secret_detection_and_redaction(self):
-        test_hardcoded_secret_detection_and_redaction()
+    def test_15_matrix_java(self):
+        test_matrix_java()
 
-    def test_16_key_like_strings_are_not_false_positives(self):
-        test_key_like_strings_are_not_false_positives()
+    def test_16_matrix_c(self):
+        test_matrix_c()
 
-    def test_17_dynamic_generated_values_are_not_hardcoded_secrets(self):
-        test_dynamic_generated_values_are_not_hardcoded_secrets()
+    def test_17_matrix_pem(self):
+        test_matrix_pem()
 
-    def test_18_comment_markers_inside_strings_do_not_hide_active_code(self):
-        test_comment_markers_inside_strings_do_not_hide_active_code()
+    def test_18_negative_cases(self):
+        test_negative_cases()
 
-    def test_19_malformed_source_does_not_abort_regex_detection(self):
-        test_malformed_source_does_not_abort_regex_detection()
-
-    def test_20_detected_assets_include_required_evidence_fields(self):
-        test_detected_assets_include_required_evidence_fields()
+    def test_19_deduplication_and_edge_cases(self):
+        test_deduplication_and_edge_cases()
 
 
 if __name__ == "__main__":

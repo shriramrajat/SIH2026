@@ -1,107 +1,83 @@
 # SIH 2026
 
-Technical POC repository for our shortlisted Smart India Hackathon 2026 problem statements.
+Technical POC repository for our active Smart India Hackathon 2026 problem statements.
 
 ## Team
 
-| Member | GitHub | Role |
-|---|---|---|
-| Rajat | `shriramrajat` | Team Lead / Technical Lead |
-| Rohan | `rskusalkar78` | PS 26164 Owner |
-| Matin | `shaikhmatin723-blip` | PS 26100 Owner |
-| Ashutosh | `AshutoshMashitkar` | Standby / Support |
+| Member | GitHub | Role | Primary Responsibility |
+|---|---|---|---|
+| Rajat | `shriramrajat` | Team Leader | Architecture, technical decisions, integration, coordination, final presentation |
+| Rohan | `rskusalkar78` | Core Developer — 26164 | ECDAT/Crypto Scanner core development |
+| Matin | `shaikhmatin723-blip` | Core Developer — 26164 | Scanner validation, testing, detection accuracy |
+| Ashutosh | `AshutoshMashitkar` | Supporting Developer + Documentation | Development support, testing, fixtures, technical documentation |
+| Shruti | — | PPT + Documentation | PPT, documentation, diagrams and visuals |
+| Arya | — | PPT + Documentation | PPT, documentation, demo flow and presentation preparation |
+| Everyone | — | Presentation & Q&A | Understand both PSs and participate in final presentation |
 
-## Shortlisted Problem Statements
+---
 
-### PS 26155
+## Active Problem Statements
 
-**AI-Driven Multi-Vendor Network Security Compliance Auditor**
+### PS 26155 — Network Device Security Compliance
+
+**Full title:** AI-Driven Multi-Vendor Network Security Compliance Auditor
 
 **Owner:** Rajat
 
-**Branch:** `poc/26155`
+**Status:** Active — Flagship
 
-**Focus:**
-- Multi-vendor configuration analysis
-- Vendor-neutral normalization
-- Security compliance
-- AI-assisted configuration adaptation
-- Remediation
-- Reporting
+**Current implementation:**
+- Cisco IOS/IOS-XE and Juniper JunOS parsers
+- Vendor-neutral normalization model
+- Deterministic compliance engine
+- 4 controls: SSH-001, TLN-001, EXEC-001, PWD-001
+- **229 tests passing**
 
----
-
-### PS 26164
-
-**Enterprise Cryptographic Discovery & Analysis Tool (ECDAT)**
-
-**Owner:** Rohan
-
-**Branch:** `poc/26164`
-
-**Focus:**
-- Cryptographic artefact discovery
-- Source-code scanning
-- CBOM generation
-- Quantum risk assessment
-- PQC migration recommendations
-
-**Initial POC flow:**
-
-`Source Repository → Crypto Scanner → Crypto Artefacts → Structured CBOM-style Output`
+**See:** [`26155/README.md`](26155/README.md) | [`26155/docs/`](26155/docs/)
 
 ---
 
-### PS 26100
+### PS 26164 — Enterprise Cryptographic Discovery & Analysis Tool (ECDAT)
 
-**AI-Powered Integrated Bid Compliance Verification Platform for GeM Procurement**
+**Full title:** Enterprise Cryptographic Discovery & Analysis Tool
 
-**Owner:** Matin
+**Owners:** Rohan (scanner core), Matin (validation, testing)
 
-**Branch:** `poc/26100`
+**Status:** Active — Secondary
 
-**Focus:**
-- Tender requirement extraction
-- Bidder evidence extraction
-- Requirement matching
-- Compliance verification
-- Evidence-backed results
-- Reporting
+**Current implementation:**
+- Recursive source-file discovery with directory exclusion
+- Python AST-based detection (`ast_parser.py`)
+- Regex-based detection for Python, Java, C/C++, PEM files
+- Comment stripping (Python `#`, Java/C `//` and `/* */`)
+- `CryptoAsset` model with structured `Evidence`
+- Deterministic SHA-256 asset IDs
+- Repo-relative normalised file paths
+- **13 tests passing**
 
-**Initial POC flow:**
-
-`Tender → Requirements → Bid Document → Evidence → Compliance Result`
+**See:** [`26164/README.md`](26164/README.md) | [`26164/Docs/`](26164/Docs/)
 
 ---
 
-### PS 26103
+## Dropped Problem Statements
 
-**Web-Based Integrated Project Monitoring Platform**
+### PS 26100 — AI-Powered Integrated Bid Compliance Verification Platform
+**Status:** Dropped
 
-**Owner:** Rajat
+**Reason:** The team can pursue a maximum of two PS. PS 26155 + PS 26164 provide a stronger complementary cybersecurity-focused portfolio and better technical coherence.
 
-**Support:** Ashutosh
+### PS 26103 — Web-Based Integrated Project Monitoring Platform
+**Status:** Dropped
 
-**Branch:** `poc/26103`
-
-**Focus:**
-- Project monitoring
-- Tasks
-- Milestones
-- Progress
-- Dependencies
-- Risk detection
-- Alerts
+**Reason:** Team can pursue a maximum of two PS. PS 26103 has the least technical progress and lowest strategic differentiation.
 
 ---
 
 ## Development Strategy
 
-We are building **technical Proofs of Concept first**, not four complete production systems.
+We are building **technical Proofs of Concept first**, not production systems.
 
 The objective is to prove the hardest and most important technical ideas.
-
-Our general development cycle is:
 
 `Understand → Research → Define → Design → Implement → Test → Measure → Review → Improve`
 
@@ -109,26 +85,13 @@ Our general development cycle is:
 
 Do not work directly on `main`.
 
-Use:
-
 `POC branch → Feature branch → Implementation → Testing → Commit → Push → Pull Request → Review → Merge`
 
-Examples:
-
-- `feature/crypto-scanner`
-- `feature/requirement-extraction`
-- `feature/network-parser`
-- `feature/project-risk-engine`
-
 ## Protected Branches
-
-The following branches are protected:
 
 - `main`
 - `poc/26155`
 - `poc/26164`
-- `poc/26100`
-- `poc/26103`
 
 Pull requests and review are required before merging into protected branches.
 
@@ -155,36 +118,13 @@ We avoid:
 - Unnecessary dependencies
 - Blindly copying AI-generated code
 
-## Repository Documentation
+---
 
-Detailed problem-statement documentation is maintained under:
+## Implementation Status (main branch)
 
-`Projects/SIH/`
-
-The CareerOS repository contains the broader SIH planning and execution documentation.
-
-## Current Status
-
-## Active Problem Statements
-
-### PS 26155
-AI-Driven Multi-Vendor Network Security Compliance Auditor
-**Status:** Active — Flagship
-
-### PS 26164
-Enterprise Cryptographic Discovery & Analysis Tool
-**Status:** Active — Secondary
-
-## Dropped Problem Statements
-
-### PS 26100
-AI-Powered Integrated Bid Compliance Verification Platform
-**Status:** Dropped
-
-**Reason:** The team can pursue a maximum of two PS. PS 26155 + PS 26164 provide a stronger complementary cybersecurity-focused portfolio and better technical coherence. (Note: The deterministic compliance core of 26100 was already implemented, but we dropped it for strategic portfolio consolidation).
-
-### PS 26103
-Web-Based Integrated Project Monitoring Platform
-**Status:** Dropped
-
-**Reason:** Team can pursue a maximum of two PS for the final SIH submission. PS 26103 has the least technical progress and lowest strategic differentiation, so development is discontinued.
+| PS | Status | Tests |
+|---|---|---|
+| **26155** | Compliance engine + 4 controls (SSH-001, TLN-001, EXEC-001, PWD-001) | **229 passing** |
+| **26164** | Scanner engine + AST + regex + comment stripping + evidence model | **13 passing** |
+| 26100 | Dropped | — |
+| 26103 | Dropped | — |
