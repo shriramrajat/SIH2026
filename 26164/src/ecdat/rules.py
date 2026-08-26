@@ -4,7 +4,7 @@ Detection Rule Specifications for ECDAT Source Code Cryptographic Scanner.
 
 import re
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Set, Union
 
 
 @dataclass
@@ -20,6 +20,90 @@ class RegexRule:
     key_length: Optional[int] = None
     mode: Optional[str] = None
     padding: Optional[str] = None
+    secret_name_group: Optional[int] = None
+    secret_value_group: Optional[int] = None
+
+
+_IDENTIFIER_TOKEN_RE = re.compile(r"[A-Z]+(?=[A-Z]|$)|[A-Z]?[a-z]+|\d+")
+_SENSITIVE_NAME_TOKENS: Set[str] = {
+    "key",
+    "secret",
+    "password",
+    "passwd",
+    "pwd",
+    "token",
+}
+_BENIGN_NAME_TOKENS: Set[str] = {
+    "algorithm",
+    "algo",
+    "count",
+    "dummy",
+    "example",
+    "fake",
+    "file",
+    "hint",
+    "id",
+    "identifier",
+    "label",
+    "length",
+    "name",
+    "not",
+    "path",
+    "policy",
+    "public",
+    "sample",
+    "size",
+    "uri",
+    "url",
+}
+_STRING_LITERAL_RE = re.compile(r"""([bBrRuUfF]*)(["'])(?:\\.|(?!\2).)*\2""")
+
+
+def _identifier_tokens(identifier: str) -> Set[str]:
+    normalized = re.sub(r"[^A-Za-z0-9]+", " ", identifier)
+    tokens: Set[str] = set()
+    for part in normalized.split():
+        tokens.update(match.group(0).lower() for match in _IDENTIFIER_TOKEN_RE.finditer(part))
+    return tokens
+
+
+def is_hardcoded_secret_candidate(identifier: str, literal_value: Union[str, bytes]) -> bool:
+    """Return True for explicit secret-looking identifiers assigned static literals."""
+    tokens = _identifier_tokens(identifier)
+    if not tokens.intersection(_SENSITIVE_NAME_TOKENS):
+        return False
+    if tokens.intersection(_BENIGN_NAME_TOKENS):
+        return False
+
+    if isinstance(literal_value, bytes):
+        try:
+            value = literal_value.decode("utf-8")
+        except UnicodeDecodeError:
+            value = literal_value.hex()
+    else:
+        value = str(literal_value)
+
+    if len(value) < 12:
+        return False
+    if any(ch.isspace() for ch in value):
+        return False
+    if value.lower().startswith(("http://", "https://", "file:")):
+        return False
+    if len(set(value)) < 4:
+        return False
+    if not any(ch.isalpha() for ch in value):
+        return False
+
+    return True
+
+
+def redact_secret_literal(snippet: str) -> str:
+    """Redact the first literal in a hardcoded secret assignment evidence snippet."""
+    return _STRING_LITERAL_RE.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}***REDACTED***{match.group(2)}",
+        snippet,
+        count=1,
+    )
 
 
 # Language specific and general regex detection rules
@@ -159,6 +243,21 @@ REGEX_RULES: List[RegexRule] = [
         library="java.security",
         confidence=0.80,
     ),
+    RegexRule(
+        rule_id="java-hardcoded-secret-string",
+        name="Java Hardcoded Secret String",
+        language="java",
+        pattern=re.compile(
+            r'\b(?:(?:public|private|protected|static|final)\s+)*'
+            r'String\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"\r\n]{12,})"'
+        ),
+        algorithm="SECRET",
+        category="hardcoded_secret",
+        library="source-code",
+        confidence=0.70,
+        secret_name_group=1,
+        secret_value_group=2,
+    ),
 
     # ------------------ C / C++ RULES ------------------
     RegexRule(
@@ -244,6 +343,22 @@ REGEX_RULES: List[RegexRule] = [
         category="key_exchange",
         library="OpenSSL",
         confidence=0.80,
+    ),
+    RegexRule(
+        rule_id="c-hardcoded-secret-string",
+        name="C/C++ Hardcoded Secret String",
+        language="c",
+        pattern=re.compile(
+            r'\b(?:static\s+)?(?:const\s+)?(?:char\s*(?:\*+\s*)+|char\s+)'
+            r'([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\])?'
+            r'\s*=\s*"([^"\r\n]{12,})"'
+        ),
+        algorithm="SECRET",
+        category="hardcoded_secret",
+        library="source-code",
+        confidence=0.70,
+        secret_name_group=1,
+        secret_value_group=2,
     ),
 
     # ------------------ ALL / PEM MARKERS ------------------

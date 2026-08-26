@@ -7,7 +7,12 @@ import os
 from pathlib import Path
 from typing import List, Set, Union, Optional
 from ecdat.models import CryptoAsset
-from ecdat.rules import REGEX_RULES, RegexRule
+from ecdat.rules import (
+    REGEX_RULES,
+    RegexRule,
+    is_hardcoded_secret_candidate,
+    redact_secret_literal,
+)
 from ecdat.ast_parser import scan_python_ast
 
 DEFAULT_IGNORED_DIRS: Set[str] = {
@@ -61,6 +66,8 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
             current_chars = list(line)
             i = 0
             n = len(current_chars)
+            quote_char = None
+            escaped = False
             while i < n:
                 if in_block_comment:
                     if i + 1 < n and current_chars[i] == '*' and current_chars[i + 1] == '/':
@@ -72,7 +79,19 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
                         current_chars[i] = ' '
                         i += 1
                 else:
-                    if i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
+                    ch = current_chars[i]
+                    if quote_char:
+                        if escaped:
+                            escaped = False
+                        elif ch == '\\':
+                            escaped = True
+                        elif ch == quote_char:
+                            quote_char = None
+                        i += 1
+                    elif ch in ['"', "'"]:
+                        quote_char = ch
+                        i += 1
+                    elif i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
                         current_chars[i] = ' '
                         current_chars[i + 1] = ' '
                         in_block_comment = True
@@ -88,6 +107,72 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
             cleaned_lines.append(line)
 
     return cleaned_lines
+
+
+def _string_literal_masks(content_lines: List[str], language: str) -> List[List[bool]]:
+    """Build per-line masks for string literal regions, preserving column positions."""
+    if language == "pem":
+        return [[False] * len(line) for line in content_lines]
+
+    masks: List[List[bool]] = []
+    triple_quote = None
+
+    for line in content_lines:
+        mask = [False] * len(line)
+        i = 0
+        n = len(line)
+
+        while i < n:
+            if triple_quote:
+                end = line.find(triple_quote, i)
+                end_pos = n if end == -1 else end + 3
+                for pos in range(i, end_pos):
+                    mask[pos] = True
+                if end == -1:
+                    i = n
+                else:
+                    triple_quote = None
+                    i = end_pos
+                continue
+
+            if language in ["python", "java"] and i + 2 < n and line[i:i + 3] in ['"""', "'''"]:
+                triple_quote = line[i:i + 3]
+                end = line.find(triple_quote, i + 3)
+                end_pos = n if end == -1 else end + 3
+                for pos in range(i, end_pos):
+                    mask[pos] = True
+                if end == -1:
+                    i = n
+                else:
+                    triple_quote = None
+                    i = end_pos
+                continue
+
+            if line[i] in ['"', "'"]:
+                quote_char = line[i]
+                start = i
+                i += 1
+                escaped = False
+                while i < n:
+                    ch = line[i]
+                    if escaped:
+                        escaped = False
+                    elif ch == "\\":
+                        escaped = True
+                    elif ch == quote_char:
+                        i += 1
+                        break
+                    i += 1
+
+                for pos in range(start, min(i, n)):
+                    mask[pos] = True
+                continue
+
+            i += 1
+
+        masks.append(mask)
+
+    return masks
 
 
 class Scanner:
@@ -149,8 +234,12 @@ class Scanner:
         effective_root = root_dir or self.root_dir
 
         cleaned_lines = strip_comments_from_lines(content_lines, language)
+        string_masks = _string_literal_masks(cleaned_lines, language)
 
-        for idx, (original_line, search_line) in enumerate(zip(content_lines, cleaned_lines), start=1):
+        for idx, (original_line, search_line, string_mask) in enumerate(
+            zip(content_lines, cleaned_lines, string_masks),
+            start=1,
+        ):
             stripped_search = search_line.strip()
             if not stripped_search:
                 continue
@@ -162,7 +251,13 @@ class Scanner:
                     if not (rule.language == "c" and language == "cpp"):
                         continue
 
-                match = rule.pattern.search(search_line)
+                match = None
+                for candidate in rule.pattern.finditer(search_line):
+                    if candidate.start() < len(string_mask) and string_mask[candidate.start()]:
+                        continue
+                    match = candidate
+                    break
+
                 if match:
                     algorithm = rule.algorithm
                     category = rule.category
@@ -172,6 +267,14 @@ class Scanner:
                     padding = rule.padding
                     confidence = rule.confidence
                     detection_mechanism = "pem_header" if library == "PEM" else "regex"
+                    code_snippet = original_line.strip()
+
+                    if rule.secret_name_group and rule.secret_value_group:
+                        identifier = match.group(rule.secret_name_group)
+                        literal_value = match.group(rule.secret_value_group)
+                        if not is_hardcoded_secret_candidate(identifier, literal_value):
+                            continue
+                        code_snippet = redact_secret_literal(code_snippet)
 
                     # Dynamic parsing for Java rules
                     if rule.rule_id == "java-cipher-instance":
@@ -211,7 +314,7 @@ class Scanner:
                         algorithm=algorithm,
                         file_path=str(file_path),
                         line_number=idx,
-                        code_snippet=original_line.strip(),
+                        code_snippet=code_snippet,
                         library=library,
                         confidence=confidence,
                         language=language,
