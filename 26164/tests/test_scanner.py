@@ -4,6 +4,8 @@ Comprehensive pytest suite for ECDAT Source Code Cryptographic Scanner.
 
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from textwrap import dedent
 
 # Ensure src/ is in python path
 src_dir = Path(__file__).resolve().parent.parent / "src"
@@ -14,6 +16,13 @@ from ecdat.scanner import Scanner
 from ecdat.models import CryptoAsset
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+def _write_source(root: Path, relative_name: str, source: str) -> Path:
+    path = root / relative_name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(dedent(source).strip() + "\n", encoding="utf-8")
+    return path
 
 
 def test_file_discovery():
@@ -275,3 +284,327 @@ def test_comment_filtering():
     assert "EVP_aes_256_gcm" in c_assets[0].code_snippet
     assert not any("EVP_aes_128_cbc" in a.code_snippet for a in c_assets)
     assert not any("EVP_md5" in a.code_snippet for a in c_assets)
+
+
+def test_detection_matrix_core_language_capabilities():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_source(
+            root,
+            "matrix.py",
+            """
+            import hashlib
+            from Crypto.PublicKey import RSA
+            from Crypto.Cipher import AES
+            from cryptography.hazmat.primitives import hashes
+
+            def run(key, nonce):
+                hashlib.md5(b"legacy")
+                hashlib.sha1(b"legacy")
+                hashlib.sha256(b"modern")
+                RSA.generate(2048)
+                AES.new(key, AES.MODE_GCM, nonce=nonce)
+                return hashes.SHA512()
+            """,
+        )
+        _write_source(
+            root,
+            "Matrix.java",
+            """
+            import javax.crypto.Cipher;
+            import java.security.KeyPairGenerator;
+            import java.security.MessageDigest;
+
+            class Matrix {
+                void run() throws Exception {
+                    Cipher.getInstance("AES/GCM/NoPadding");
+                    Cipher.getInstance("DES/ECB/PKCS5Padding");
+                    KeyPairGenerator.getInstance("RSA");
+                    KeyPairGenerator.getInstance("EC");
+                    MessageDigest.getInstance("MD5");
+                    MessageDigest.getInstance("SHA-256");
+                }
+            }
+            """,
+        )
+        _write_source(
+            root,
+            "matrix.c",
+            """
+            #include <openssl/evp.h>
+            #include <openssl/rsa.h>
+
+            void run(void) {
+                RSA_generate_key_ex(rsa, 2048, bne, NULL);
+                EVP_aes_128_cbc();
+                EVP_aes_256_gcm();
+                EVP_sha256();
+                EVP_sha1();
+                EVP_md5();
+                EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+                DH_new();
+            }
+            """,
+        )
+
+        assets = Scanner(root_dir=root).scan(root)
+
+    py_assets = [a for a in assets if a.language == "python"]
+    java_assets = [a for a in assets if a.language == "java"]
+    c_assets = [a for a in assets if a.language == "c"]
+
+    assert {a.algorithm for a in py_assets} == {"AES", "MD5", "RSA", "SHA-1", "SHA-256", "SHA-512"}
+    assert any(a.algorithm == "RSA" and a.key_length == 2048 for a in py_assets)
+    assert any(a.algorithm == "AES" and a.mode == "GCM" for a in py_assets)
+
+    assert {a.algorithm for a in java_assets} == {"AES", "DES", "ECC", "MD5", "RSA", "SHA-256"}
+    assert any(a.algorithm == "AES" and a.mode == "GCM" and a.padding == "NoPadding" for a in java_assets)
+    assert any(a.algorithm == "DES" and a.mode == "ECB" for a in java_assets)
+
+    assert {a.algorithm for a in c_assets} == {"AES", "DH", "ECC", "MD5", "RSA", "SHA-1", "SHA-256"}
+    assert any(a.algorithm == "AES" and a.key_length == 128 and a.mode == "CBC" for a in c_assets)
+    assert any(a.algorithm == "AES" and a.key_length == 256 and a.mode == "GCM" for a in c_assets)
+
+
+def test_hardcoded_secret_detection_and_redaction():
+    raw_values = [
+        "ECDATSYNTHETICKEY1234567890",
+        "ecdatsynthetic-db-pass-123",
+        "ECDATSYNTHETICBYTES123",
+    ]
+
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_source(
+            root,
+            "hardcoded.py",
+            """
+            import os
+
+            encryption_key = "ECDATSYNTHETICKEY1234567890"
+            db_password: str = "ecdatsynthetic-db-pass-123"
+            api_secret_bytes = b"ECDATSYNTHETICBYTES123"
+            runtime_key = os.urandom(32)
+            password_policy = "minimum-length-sixteen"
+            """,
+        )
+        _write_source(
+            root,
+            "Hardcoded.java",
+            """
+            class Hardcoded {
+                private static final String ENCRYPTION_KEY = "ECDATSYNTHETICKEY1234567890";
+                private static final String DB_PASSWORD = "ecdatsynthetic-db-pass-123";
+                private static final String KEY_ID = "ECDATSYNTHETICKEY1234567890";
+                private static final String PUBLIC_KEY_LABEL = "ECDATSYNTHETICKEY1234567890";
+                String runtimeKey = System.getenv("ECDAT_SYNTHETIC_KEY");
+            }
+            """,
+        )
+        _write_source(
+            root,
+            "hardcoded.c",
+            """
+            void hardcoded(void) {
+                const char *encryption_key = "ECDATSYNTHETICKEY1234567890";
+                static const char *db_password = "ecdatsynthetic-db-pass-123";
+                const char *key_label = "ECDATSYNTHETICKEY1234567890";
+                char token_buffer[32];
+            }
+            """,
+        )
+
+        assets = Scanner(root_dir=root).scan(root)
+
+    secret_assets = [a for a in assets if a.category == "hardcoded_secret"]
+    assert len(secret_assets) == 7
+    assert {a.algorithm for a in secret_assets} == {"SECRET"}
+    assert {a.language for a in secret_assets} == {"python", "java", "c"}
+    assert all("***REDACTED***" in a.code_snippet for a in secret_assets)
+    assert all(a.library == "source-code" for a in secret_assets)
+
+    for raw_value in raw_values:
+        assert all(raw_value not in a.code_snippet for a in secret_assets)
+        assert all(raw_value not in a.evidence.code_snippet for a in secret_assets)
+
+
+def test_key_like_strings_are_not_false_positives():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_source(
+            root,
+            "strings.py",
+            """
+            def docs():
+                note = "hashlib.md5(b'legacy')"
+                pem_text = "-----BEGIN RSA PRIVATE KEY-----"
+                not_a_key = "ECDATSYNTHETICKEY1234567890"
+                password_policy = "ecdatsynthetic-db-pass-123"
+                return note, pem_text, not_a_key, password_policy
+            """,
+        )
+        _write_source(
+            root,
+            "Strings.java",
+            """
+            class Strings {
+                void docs() {
+                    String doc = "Cipher.getInstance(\\"AES/CBC/PKCS5Padding\\")";
+                    String apiKeyName = "ECDATSYNTHETICKEY1234567890";
+                    String passwordPolicy = "ecdatsynthetic-db-pass-123";
+                }
+            }
+            """,
+        )
+        _write_source(
+            root,
+            "strings.c",
+            """
+            void docs(void) {
+                const char *doc = "EVP_md5() and EVP_aes_128_cbc() are documentation";
+                const char *key_label = "ECDATSYNTHETICKEY1234567890";
+                int value = 42;
+            }
+            """,
+        )
+
+        assets = Scanner(root_dir=root).scan(root)
+
+    assert assets == []
+
+
+def test_dynamic_generated_values_are_not_hardcoded_secrets():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_source(
+            root,
+            "dynamic.py",
+            """
+            import os
+            from Crypto.Cipher import AES
+            from Crypto.Random import get_random_bytes
+
+            runtime_key = get_random_bytes(32)
+            nonce = os.urandom(12)
+            cipher = AES.new(runtime_key, AES.MODE_GCM, nonce=nonce)
+            """,
+        )
+        _write_source(
+            root,
+            "Dynamic.java",
+            """
+            import javax.crypto.Cipher;
+
+            class Dynamic {
+                void run() throws Exception {
+                    String apiSecret = System.getenv("ECDAT_SYNTHETIC_SECRET");
+                    Cipher.getInstance("AES/GCM/NoPadding");
+                }
+            }
+            """,
+        )
+        _write_source(
+            root,
+            "dynamic.c",
+            """
+            #include <openssl/evp.h>
+            #include <openssl/rand.h>
+
+            void run(void) {
+                unsigned char encryption_key[32];
+                RAND_bytes(encryption_key, sizeof(encryption_key));
+                EVP_aes_256_gcm();
+            }
+            """,
+        )
+
+        assets = Scanner(root_dir=root).scan(root)
+
+    assert not any(a.category == "hardcoded_secret" for a in assets)
+    assert any(a.language == "python" and a.algorithm == "AES" and a.mode == "GCM" for a in assets)
+    assert any(a.language == "java" and a.algorithm == "AES" and a.mode == "GCM" for a in assets)
+    assert any(a.language == "c" and a.algorithm == "AES" and a.mode == "GCM" for a in assets)
+
+
+def test_comment_markers_inside_strings_do_not_hide_active_code():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_source(
+            root,
+            "marker.py",
+            """
+            import hashlib
+            note = "# not a source comment"; digest = hashlib.sha256(b"active")
+            """,
+        )
+        _write_source(
+            root,
+            "Marker.java",
+            """
+            import javax.crypto.Cipher;
+
+            class Marker {
+                void run() throws Exception {
+                    String url = "https://example.test"; Cipher.getInstance("AES/GCM/NoPadding");
+                }
+            }
+            """,
+        )
+        _write_source(
+            root,
+            "marker.c",
+            """
+            #include <openssl/evp.h>
+
+            void run(void) {
+                const char *url = "https://example.test"; EVP_sha256();
+            }
+            """,
+        )
+
+        assets = Scanner(root_dir=root).scan(root)
+
+    assert any(a.language == "python" and a.algorithm == "SHA-256" for a in assets)
+    assert any(a.language == "java" and a.algorithm == "AES" and a.mode == "GCM" for a in assets)
+    assert any(a.language == "c" and a.algorithm == "SHA-256" for a in assets)
+
+
+def test_malformed_source_does_not_abort_regex_detection():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        broken_file = _write_source(
+            root,
+            "broken.py",
+            """
+            import hashlib
+            legacy = hashlib.md5(b"legacy")
+            def broken(:
+                pass
+            """,
+        )
+
+        assets = Scanner(root_dir=root).scan_file(broken_file, root_dir=root)
+
+    assert len(assets) == 1
+    assert assets[0].algorithm == "MD5"
+    assert assets[0].confidence == 0.80
+    assert assets[0].evidence.detection_mechanism == "regex"
+
+
+def test_detected_assets_include_required_evidence_fields():
+    assets = Scanner(root_dir=FIXTURES_DIR).scan(FIXTURES_DIR)
+
+    assert assets
+    for asset in assets:
+        assert asset.asset_id
+        assert asset.language in {"python", "java", "c", "pem"}
+        assert asset.file_path
+        assert asset.line_number > 0
+        assert asset.category
+        assert asset.algorithm
+        assert asset.library
+        assert asset.confidence is not None
+        assert asset.evidence is not None
+        assert asset.evidence.code_snippet
+        assert asset.evidence.detection_mechanism in {"ast", "regex", "pem_header"}
+        assert asset.evidence.matched_rule_id

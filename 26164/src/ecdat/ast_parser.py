@@ -6,6 +6,7 @@ import ast
 from pathlib import Path
 from typing import List, Optional, Union
 from ecdat.models import CryptoAsset
+from ecdat.rules import is_hardcoded_secret_candidate, redact_secret_literal
 
 
 class PythonASTScanner(ast.NodeVisitor):
@@ -19,6 +20,60 @@ class PythonASTScanner(ast.NodeVisitor):
         if 1 <= lineno <= len(self.source_lines):
             return self.source_lines[lineno - 1].strip()
         return ""
+
+    def _target_name(self, target: ast.AST) -> Optional[str]:
+        if isinstance(target, ast.Name):
+            return target.id
+        if isinstance(target, ast.Attribute):
+            return target.attr
+        return None
+
+    def _literal_value(self, value: ast.AST) -> Optional[Union[str, bytes]]:
+        if isinstance(value, ast.Constant) and isinstance(value.value, (str, bytes)):
+            return value.value
+        return None
+
+    def _add_hardcoded_secret(self, node: ast.AST, identifier: str, literal_value: Union[str, bytes]) -> None:
+        if not is_hardcoded_secret_candidate(identifier, literal_value):
+            return
+
+        snippet = redact_secret_literal(self._get_snippet(node.lineno))
+        self.assets.append(
+            CryptoAsset.create(
+                name="Hardcoded Secret Literal (AST)",
+                category="hardcoded_secret",
+                algorithm="SECRET",
+                file_path=self.file_path,
+                line_number=node.lineno,
+                code_snippet=snippet,
+                library="source-code",
+                confidence=0.85,
+                language="python",
+                detection_mechanism="ast",
+                matched_rule_id="py-ast-hardcoded-secret",
+                root_dir=self.root_dir,
+            )
+        )
+
+    def visit_Assign(self, node: ast.Assign):
+        literal_value = self._literal_value(node.value)
+        if literal_value is not None:
+            for target in node.targets:
+                identifier = self._target_name(target)
+                if identifier:
+                    self._add_hardcoded_secret(node, identifier, literal_value)
+                    break
+
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        if node.value is not None:
+            literal_value = self._literal_value(node.value)
+            identifier = self._target_name(node.target)
+            if literal_value is not None and identifier:
+                self._add_hardcoded_secret(node, identifier, literal_value)
+
+        self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call):
         # 1. RSA.generate(...)
