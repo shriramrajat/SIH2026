@@ -4,15 +4,15 @@ Recursively scans source files for cryptographic algorithms, libraries, keys, an
 """
 
 import os
+import re
 from pathlib import Path
 from typing import List, Set, Union, Optional
-from ecdat.models import CryptoAsset
-from ecdat.rules import (
-    REGEX_RULES,
-    RegexRule,
-    is_hardcoded_secret_candidate,
-    redact_secret_literal,
+from ecdat.models import (
+    CryptoAsset,
+    _extract_string_literals,
+    is_hardcoded_secret_candidate
 )
+from ecdat.rules import REGEX_RULES, RegexRule
 from ecdat.ast_parser import scan_python_ast
 
 DEFAULT_IGNORED_DIRS: Set[str] = {
@@ -33,11 +33,7 @@ SUPPORTED_EXTENSIONS: Set[str] = {".py", ".java", ".c", ".cpp", ".h", ".hpp", ".
 def strip_comments_from_lines(content_lines: List[str], language: str) -> List[str]:
     """
     Strips single-line and multi-line comments from code lines while preserving
-<<<<<<< HEAD
     line positions and line count. Does not build a full language parser.
-=======
-    line positions and line count.
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
     """
     cleaned_lines = []
     in_block_comment = False
@@ -70,11 +66,6 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
             current_chars = list(line)
             i = 0
             n = len(current_chars)
-<<<<<<< HEAD
-            quote_char = None
-            escaped = False
-=======
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
             while i < n:
                 if in_block_comment:
                     if i + 1 < n and current_chars[i] == '*' and current_chars[i + 1] == '/':
@@ -86,23 +77,7 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
                         current_chars[i] = ' '
                         i += 1
                 else:
-<<<<<<< HEAD
-                    ch = current_chars[i]
-                    if quote_char:
-                        if escaped:
-                            escaped = False
-                        elif ch == '\\':
-                            escaped = True
-                        elif ch == quote_char:
-                            quote_char = None
-                        i += 1
-                    elif ch in ['"', "'"]:
-                        quote_char = ch
-                        i += 1
-                    elif i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
-=======
                     if i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
                         current_chars[i] = ' '
                         current_chars[i + 1] = ' '
                         in_block_comment = True
@@ -120,71 +95,73 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
     return cleaned_lines
 
 
-<<<<<<< HEAD
-def _string_literal_masks(content_lines: List[str], language: str) -> List[List[bool]]:
-    """Build per-line masks for string literal regions, preserving column positions."""
-    if language == "pem":
-        return [[False] * len(line) for line in content_lines]
-
-    masks: List[List[bool]] = []
-    triple_quote = None
+def _string_literal_masks(content_lines: List[str], language: str) -> List[str]:
+    masked_lines = []
+    in_quote = None  # None, "'", '"', "'''", '"""'
+    in_quote_mask = True
 
     for line in content_lines:
-        mask = [False] * len(line)
+        chars = list(line)
+        n = len(chars)
         i = 0
-        n = len(line)
-
         while i < n:
-            if triple_quote:
-                end = line.find(triple_quote, i)
-                end_pos = n if end == -1 else end + 3
-                for pos in range(i, end_pos):
-                    mask[pos] = True
-                if end == -1:
-                    i = n
-                else:
-                    triple_quote = None
-                    i = end_pos
+            if in_quote and chars[i] == '\\' and i + 1 < n:
+                if in_quote_mask:
+                    chars[i] = ' '
+                    chars[i+1] = ' '
+                i += 2
                 continue
 
-            if language in ["python", "java"] and i + 2 < n and line[i:i + 3] in ['"""', "'''"]:
-                triple_quote = line[i:i + 3]
-                end = line.find(triple_quote, i + 3)
-                end_pos = n if end == -1 else end + 3
-                for pos in range(i, end_pos):
-                    mask[pos] = True
-                if end == -1:
-                    i = n
-                else:
-                    triple_quote = None
-                    i = end_pos
-                continue
+            if language == "python" and not in_quote:
+                if i + 2 < n and line[i:i+3] == '"""':
+                    in_quote = '"""'
+                    in_quote_mask = True
+                    i += 3
+                    continue
+                elif i + 2 < n and line[i:i+3] == "'''":
+                    in_quote = "'''"
+                    in_quote_mask = True
+                    i += 3
+                    continue
 
-            if line[i] in ['"', "'"]:
-                quote_char = line[i]
-                start = i
-                i += 1
-                escaped = False
-                while i < n:
-                    ch = line[i]
-                    if escaped:
-                        escaped = False
-                    elif ch == "\\":
-                        escaped = True
-                    elif ch == quote_char:
-                        i += 1
-                        break
+            if language == "python" and in_quote in ['"""', "'''"]:
+                target = in_quote
+                if i + 2 < n and line[i:i+3] == target:
+                    in_quote = None
+                    i += 3
+                    continue
+                else:
+                    chars[i] = ' '
                     i += 1
+                    continue
 
-                for pos in range(start, min(i, n)):
-                    mask[pos] = True
-                continue
+            if not in_quote:
+                if chars[i] in ["'", '"']:
+                    quote_char = chars[i]
+                    mask_this = True
+                    if language == "java" and quote_char == '"':
+                        prefix = "".join(chars[:i])
+                        if re.search(r'getInstance\s*\(\s*$', prefix):
+                            mask_this = False
+
+                    in_quote = quote_char
+                    in_quote_mask = mask_this
+                    i += 1
+                    continue
+            else:
+                if chars[i] == in_quote:
+                    in_quote = None
+                    i += 1
+                    continue
+                else:
+                    if in_quote_mask:
+                        chars[i] = ' '
+                    i += 1
+                    continue
 
             i += 1
-
-        masks.append(mask)
-
-    return masks
+        masked_lines.append("".join(chars))
+    return masked_lines
 
 
 class Scanner:
@@ -193,10 +170,6 @@ class Scanner:
         ignored_dirs: Optional[Set[str]] = None,
         root_dir: Optional[Union[str, Path]] = None,
     ):
-=======
-class Scanner:
-    def __init__(self, ignored_dirs: Optional[Set[str]] = None, root_dir: Optional[Union[str, Path]] = None):
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
         self.ignored_dirs = ignored_dirs or DEFAULT_IGNORED_DIRS
         self.root_dir = root_dir
 
@@ -250,17 +223,36 @@ class Scanner:
         effective_root = root_dir or self.root_dir
 
         cleaned_lines = strip_comments_from_lines(content_lines, language)
-<<<<<<< HEAD
-        string_masks = _string_literal_masks(cleaned_lines, language)
 
-        for idx, (original_line, search_line, string_mask) in enumerate(
-            zip(content_lines, cleaned_lines, string_masks),
-            start=1,
-        ):
-=======
-
+        # Detect hardcoded secrets on comment-cleaned lines
         for idx, (original_line, search_line) in enumerate(zip(content_lines, cleaned_lines), start=1):
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
+            stripped_search = search_line.strip()
+            if not stripped_search:
+                continue
+
+            literals = _extract_string_literals(search_line, language)
+            for lit in literals:
+                if is_hardcoded_secret_candidate(lit):
+                    asset = CryptoAsset.create(
+                        name="Hardcoded Secret Detected",
+                        category="hardcoded_secret",
+                        algorithm="Secret",
+                        file_path=str(file_path),
+                        line_number=idx,
+                        code_snippet=original_line.strip(),
+                        library="None",
+                        confidence=0.85,
+                        language=language,
+                        detection_mechanism="regex",
+                        matched_rule_id="hardcoded-secret",
+                        root_dir=effective_root,
+                    )
+                    assets.append(asset)
+
+        # Mask string literals for standard regex rules
+        masked_lines = _string_literal_masks(cleaned_lines, language)
+
+        for idx, (original_line, search_line) in enumerate(zip(content_lines, masked_lines), start=1):
             stripped_search = search_line.strip()
             if not stripped_search:
                 continue
@@ -272,18 +264,7 @@ class Scanner:
                     if not (rule.language == "c" and language == "cpp"):
                         continue
 
-<<<<<<< HEAD
-                match = None
-                for candidate in rule.pattern.finditer(search_line):
-                    if candidate.start() < len(string_mask) and string_mask[candidate.start()]:
-                        continue
-                    match = candidate
-                    break
-
-=======
-                match = rule.pattern.search(search_line)
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
-                if match:
+                for match in rule.pattern.finditer(search_line):
                     algorithm = rule.algorithm
                     category = rule.category
                     library = rule.library
@@ -292,17 +273,6 @@ class Scanner:
                     padding = rule.padding
                     confidence = rule.confidence
                     detection_mechanism = "pem_header" if library == "PEM" else "regex"
-<<<<<<< HEAD
-                    code_snippet = original_line.strip()
-
-                    if rule.secret_name_group and rule.secret_value_group:
-                        identifier = match.group(rule.secret_name_group)
-                        literal_value = match.group(rule.secret_value_group)
-                        if not is_hardcoded_secret_candidate(identifier, literal_value):
-                            continue
-                        code_snippet = redact_secret_literal(code_snippet)
-=======
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
 
                     # Dynamic parsing for Java rules
                     if rule.rule_id == "java-cipher-instance":
@@ -342,11 +312,7 @@ class Scanner:
                         algorithm=algorithm,
                         file_path=str(file_path),
                         line_number=idx,
-<<<<<<< HEAD
-                        code_snippet=code_snippet,
-=======
                         code_snippet=original_line.strip(),
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
                         library=library,
                         confidence=confidence,
                         language=language,
@@ -383,10 +349,10 @@ class Scanner:
         if language == "python":
             ast_assets = scan_python_ast(str(file_path), content, root_dir=effective_root)
 
-            # Deduplicate / merge AST and Regex hits on the same line and algorithm
-            ast_lines_algos = {(a.line_number, a.algorithm) for a in ast_assets}
+            # Deduplicate / merge AST and Regex hits on the same line, algorithm, and library
+            ast_lines_algos_libs = {(a.line_number, a.algorithm, a.library) for a in ast_assets}
             filtered_regex_assets = [
-                r for r in regex_assets if (r.line_number, r.algorithm) not in ast_lines_algos
+                r for r in regex_assets if (r.line_number, r.algorithm, r.library) not in ast_lines_algos_libs
             ]
             return ast_assets + filtered_regex_assets
 

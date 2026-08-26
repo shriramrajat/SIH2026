@@ -284,7 +284,6 @@ def test_comment_filtering():
     assert "EVP_aes_256_gcm" in c_assets[0].code_snippet
     assert not any("EVP_aes_128_cbc" in a.code_snippet for a in c_assets)
     assert not any("EVP_md5" in a.code_snippet for a in c_assets)
-<<<<<<< HEAD
 
 
 def test_detection_matrix_core_language_capabilities():
@@ -609,5 +608,148 @@ def test_detected_assets_include_required_evidence_fields():
         assert asset.evidence.code_snippet
         assert asset.evidence.detection_mechanism in {"ast", "regex", "pem_header"}
         assert asset.evidence.matched_rule_id
-=======
->>>>>>> a71b40e (feat: implement AST-based Python scanner and comment stripping for cryptographic analysis)
+
+
+def test_matrix_python():
+    scanner = Scanner()
+    assets = scanner.scan_file(FIXTURES_DIR / "matrix_python.py")
+
+    algos = {a.algorithm for a in assets}
+    assert "MD5" in algos
+    assert "SHA-1" in algos
+    assert "SHA-256" in algos
+    assert "SHA-512" in algos
+    assert "RSA" in algos
+    assert "AES" in algos
+    assert "Secret" in algos
+
+    rsa_static = next(a for a in assets if a.algorithm == "RSA" and a.key_length == 2048)
+    assert rsa_static.confidence == 0.95
+
+    rsa_dynamic = next(a for a in assets if a.algorithm == "RSA" and a.key_length is None)
+    assert rsa_dynamic.confidence == 0.75
+
+    aes_cbc = next(a for a in assets if a.algorithm == "AES" and a.mode == "CBC" and a.library == "PyCryptodome")
+    assert aes_cbc.confidence == 0.95
+
+    secrets = [a for a in assets if a.algorithm == "Secret"]
+    assert len(secrets) == 2
+    for s in secrets:
+        assert "REDACTED" in s.code_snippet
+        assert "AKIAIOSFODNN7EXAMPLE" not in s.code_snippet
+        assert "SuperSecretPassword123!" not in s.code_snippet
+        assert s.category == "hardcoded_secret"
+        assert s.confidence == 0.85
+        assert s.evidence.matched_rule_id == "hardcoded-secret"
+
+
+def test_matrix_java():
+    scanner = Scanner()
+    assets = scanner.scan_file(FIXTURES_DIR / "matrix_java.java")
+
+    algos = {a.algorithm for a in assets}
+    assert "AES" in algos
+    assert "DES" in algos
+    assert "RSA" in algos
+    assert "ECC" in algos
+    assert "DSA" in algos
+    assert "SHA-256" in algos
+    assert "MD5" in algos
+    assert "Secret" in algos
+
+    aes_cbc = next(a for a in assets if a.algorithm == "AES" and a.mode == "CBC")
+    assert aes_cbc.padding == "PKCS5Padding"
+    assert aes_cbc.category == "symmetric_encryption"
+
+    ecc = next(a for a in assets if a.algorithm == "ECC")
+    assert ecc.category == "asymmetric_encryption"
+
+    secrets = [a for a in assets if a.algorithm == "Secret"]
+    assert len(secrets) == 2
+    for s in secrets:
+        assert "REDACTED" in s.code_snippet
+
+
+def test_matrix_c():
+    scanner = Scanner()
+    assets = scanner.scan_file(FIXTURES_DIR / "matrix_c.c")
+
+    algos = {a.algorithm for a in assets}
+    assert "RSA" in algos
+    assert "ECC" in algos
+    assert "DH" in algos
+    assert "AES" in algos
+    assert "SHA-1" in algos
+    assert "SHA-256" in algos
+    assert "MD5" in algos
+    assert "Secret" in algos
+
+    aes_128 = next(a for a in assets if a.algorithm == "AES" and a.key_length == 128)
+    assert aes_128.mode == "CBC"
+
+    aes_256 = next(a for a in assets if a.algorithm == "AES" and a.key_length == 256)
+    assert aes_256.mode == "GCM"
+
+
+def test_matrix_pem():
+    scanner = Scanner()
+    assets = scanner.scan_file(FIXTURES_DIR / "matrix_pem.pem")
+
+    algos = [a.algorithm for a in assets]
+    assert "RSA" in algos
+    assert "ECC" in algos
+    assert "Certificate" in algos
+    assert len(assets) == 4
+
+
+def test_negative_cases():
+    scanner = Scanner()
+
+    py_assets = scanner.scan_file(FIXTURES_DIR / "negative_cases.py")
+    assert len(py_assets) == 0
+
+    java_assets = scanner.scan_file(FIXTURES_DIR / "negative_cases.java")
+    assert len(java_assets) == 0
+
+    c_assets = scanner.scan_file(FIXTURES_DIR / "negative_cases.c")
+    assert len(c_assets) == 0
+
+
+def test_deduplication_and_edge_cases():
+    scanner = Scanner()
+
+    # 1. Empty file
+    empty_file = FIXTURES_DIR / "empty.py"
+    empty_file.write_text("")
+    assets = scanner.scan_file(empty_file)
+    assert len(assets) == 0
+    empty_file.unlink()
+
+    # 2. Unsupported extension
+    unsupported_file = FIXTURES_DIR / "test.txt"
+    unsupported_file.write_text("hashlib.md5()")
+    assets = scanner.scan_file(unsupported_file)
+    assert len(assets) == 0
+    unsupported_file.unlink()
+
+    # 3. Unicode source
+    unicode_file = FIXTURES_DIR / "unicode.py"
+    unicode_file.write_text("# -*- coding: utf-8 -*-\n# Unicode comment: 🔒 key\nhashlib.md5()", encoding="utf-8")
+    assets = scanner.scan_file(unicode_file)
+    assert len(assets) == 1
+    assert assets[0].algorithm == "MD5"
+    unicode_file.unlink()
+
+    # 4. Multiple matches on one line
+    multimatch_file = FIXTURES_DIR / "multi.py"
+    multimatch_file.write_text("hashlib.md5(); hashlib.md5()")
+    assets = scanner.scan_file(multimatch_file)
+    assert len(assets) == 2
+    multimatch_file.unlink()
+
+    # 5. Multiple matches on one line in C (regex only)
+    multimatch_c = FIXTURES_DIR / "multi_c.c"
+    multimatch_c.write_text("EVP_sha256(); EVP_sha256();")
+    assets = scanner.scan_file(multimatch_c)
+    assert len(assets) == 2
+    multimatch_c.unlink()
