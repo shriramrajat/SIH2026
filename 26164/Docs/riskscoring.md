@@ -24,6 +24,26 @@ Quantum computers running **Grover's Algorithm** provide a quadratic speedup for
 
 ### 3. NIST PQC Standards & Migration Recommendation Mapping
 
+### 3a. Deterministic Asset Risk Classification
+
+ECDAT keeps discovery and interpretation separate. The scanner continues to
+produce `CryptoAsset` objects, while `ecdat.risk.classify_asset()` returns a
+structured `RiskAssessment` containing `severity`, `reason`,
+`recommendation`, and `confidence`. Classification reads only structured
+asset metadata and never copies code snippets or secret values into the risk
+output.
+
+The classifier uses these deterministic rules:
+
+- Hardcoded secrets are `CRITICAL`.
+- MD5, SHA-1, DES, 3DES, and RC4 are `HIGH`.
+- RSA keys below 2048 bits are `HIGH`; RSA and other asymmetric primitives are
+	`CRITICAL` for quantum migration planning.
+- AES-128 and unauthenticated or incomplete AES configurations are `MEDIUM`.
+- AES-256 with a recognized modern mode is `LOW`.
+- SHA-256 and SHA-512 are `INFO`.
+- Unknown or insufficient metadata is `MEDIUM` with reduced confidence.
+
 In August 2024, NIST released the finalized Post-Quantum Cryptography standards:
 * **FIPS 203**: Module-Lattice-Based Key-Encapsulation Mechanism (**ML-KEM**, derived from CRYSTALS-Kyber).
 * **FIPS 204**: Module-Lattice-Based Digital Signature Algorithm (**ML-DSA**, derived from CRYSTALS-Dilithium).
