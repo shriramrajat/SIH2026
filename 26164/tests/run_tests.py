@@ -25,6 +25,12 @@ from test_scanner import (
     test_structured_evidence,
     test_language_exposure,
     test_comment_filtering,
+    test_matrix_python,
+    test_matrix_java,
+    test_matrix_c,
+    test_matrix_pem,
+    test_negative_cases,
+    test_deduplication_and_edge_cases,
 )
 
 
@@ -67,6 +73,24 @@ class TestECDATScanner(unittest.TestCase):
 
     def test_13_comment_filtering(self):
         test_comment_filtering()
+
+    def test_14_matrix_python(self):
+        test_matrix_python()
+
+    def test_15_matrix_java(self):
+        test_matrix_java()
+
+    def test_16_matrix_c(self):
+        test_matrix_c()
+
+    def test_17_matrix_pem(self):
+        test_matrix_pem()
+
+    def test_18_negative_cases(self):
+        test_negative_cases()
+
+    def test_19_deduplication_and_edge_cases(self):
+        test_deduplication_and_edge_cases()
 
 
 if __name__ == "__main__":

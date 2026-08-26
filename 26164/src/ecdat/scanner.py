@@ -4,9 +4,14 @@ Recursively scans source files for cryptographic algorithms, libraries, keys, an
 """
 
 import os
+import re
 from pathlib import Path
 from typing import List, Set, Union, Optional
-from ecdat.models import CryptoAsset
+from ecdat.models import (
+    CryptoAsset,
+    _extract_string_literals,
+    is_hardcoded_secret_candidate
+)
 from ecdat.rules import REGEX_RULES, RegexRule
 from ecdat.ast_parser import scan_python_ast
 
@@ -90,6 +95,75 @@ def strip_comments_from_lines(content_lines: List[str], language: str) -> List[s
     return cleaned_lines
 
 
+def _string_literal_masks(content_lines: List[str], language: str) -> List[str]:
+    masked_lines = []
+    in_quote = None  # None, "'", '"', "'''", '"""'
+    in_quote_mask = True
+
+    for line in content_lines:
+        chars = list(line)
+        n = len(chars)
+        i = 0
+        while i < n:
+            if in_quote and chars[i] == '\\' and i + 1 < n:
+                if in_quote_mask:
+                    chars[i] = ' '
+                    chars[i+1] = ' '
+                i += 2
+                continue
+
+            if language == "python" and not in_quote:
+                if i + 2 < n and line[i:i+3] == '"""':
+                    in_quote = '"""'
+                    in_quote_mask = True
+                    i += 3
+                    continue
+                elif i + 2 < n and line[i:i+3] == "'''":
+                    in_quote = "'''"
+                    in_quote_mask = True
+                    i += 3
+                    continue
+
+            if language == "python" and in_quote in ['"""', "'''"]:
+                target = in_quote
+                if i + 2 < n and line[i:i+3] == target:
+                    in_quote = None
+                    i += 3
+                    continue
+                else:
+                    chars[i] = ' '
+                    i += 1
+                    continue
+
+            if not in_quote:
+                if chars[i] in ["'", '"']:
+                    quote_char = chars[i]
+                    mask_this = True
+                    if language == "java" and quote_char == '"':
+                        prefix = "".join(chars[:i])
+                        if re.search(r'getInstance\s*\(\s*$', prefix):
+                            mask_this = False
+
+                    in_quote = quote_char
+                    in_quote_mask = mask_this
+                    i += 1
+                    continue
+            else:
+                if chars[i] == in_quote:
+                    in_quote = None
+                    i += 1
+                    continue
+                else:
+                    if in_quote_mask:
+                        chars[i] = ' '
+                    i += 1
+                    continue
+
+            i += 1
+        masked_lines.append("".join(chars))
+    return masked_lines
+
+
 class Scanner:
     def __init__(
         self,
@@ -150,7 +224,35 @@ class Scanner:
 
         cleaned_lines = strip_comments_from_lines(content_lines, language)
 
+        # Detect hardcoded secrets on comment-cleaned lines
         for idx, (original_line, search_line) in enumerate(zip(content_lines, cleaned_lines), start=1):
+            stripped_search = search_line.strip()
+            if not stripped_search:
+                continue
+
+            literals = _extract_string_literals(search_line, language)
+            for lit in literals:
+                if is_hardcoded_secret_candidate(lit):
+                    asset = CryptoAsset.create(
+                        name="Hardcoded Secret Detected",
+                        category="hardcoded_secret",
+                        algorithm="Secret",
+                        file_path=str(file_path),
+                        line_number=idx,
+                        code_snippet=original_line.strip(),
+                        library="None",
+                        confidence=0.85,
+                        language=language,
+                        detection_mechanism="regex",
+                        matched_rule_id="hardcoded-secret",
+                        root_dir=effective_root,
+                    )
+                    assets.append(asset)
+
+        # Mask string literals for standard regex rules
+        masked_lines = _string_literal_masks(cleaned_lines, language)
+
+        for idx, (original_line, search_line) in enumerate(zip(content_lines, masked_lines), start=1):
             stripped_search = search_line.strip()
             if not stripped_search:
                 continue
@@ -162,8 +264,7 @@ class Scanner:
                     if not (rule.language == "c" and language == "cpp"):
                         continue
 
-                match = rule.pattern.search(search_line)
-                if match:
+                for match in rule.pattern.finditer(search_line):
                     algorithm = rule.algorithm
                     category = rule.category
                     library = rule.library
@@ -248,10 +349,10 @@ class Scanner:
         if language == "python":
             ast_assets = scan_python_ast(str(file_path), content, root_dir=effective_root)
 
-            # Deduplicate / merge AST and Regex hits on the same line and algorithm
-            ast_lines_algos = {(a.line_number, a.algorithm) for a in ast_assets}
+            # Deduplicate / merge AST and Regex hits on the same line, algorithm, and library
+            ast_lines_algos_libs = {(a.line_number, a.algorithm, a.library) for a in ast_assets}
             filtered_regex_assets = [
-                r for r in regex_assets if (r.line_number, r.algorithm) not in ast_lines_algos
+                r for r in regex_assets if (r.line_number, r.algorithm, r.library) not in ast_lines_algos_libs
             ]
             return ast_assets + filtered_regex_assets
 

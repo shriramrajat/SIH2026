@@ -3,9 +3,138 @@ Internal Data Models for ECDAT Cryptographic Asset Discovery.
 """
 
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from pathlib import Path
 import hashlib
+import math
+import re
+
+
+def calculate_entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    probabilities = [float(s.count(c)) / len(s) for c in set(s)]
+    return -sum(p * math.log(p, 2) for p in probabilities)
+
+
+def _extract_string_literals(line: str, language: str) -> List[str]:
+    literals = []
+    in_quote = None
+    current_lit = []
+
+    chars = list(line)
+    n = len(chars)
+    i = 0
+    while i < n:
+        if in_quote and chars[i] == '\\' and i + 1 < n:
+            current_lit.append(chars[i])
+            current_lit.append(chars[i+1])
+            i += 2
+            continue
+
+        if language == "python" and not in_quote:
+            if i + 2 < n and line[i:i+3] == '"""':
+                in_quote = '"""'
+                current_lit = ['"""']
+                i += 3
+                continue
+            elif i + 2 < n and line[i:i+3] == "'''":
+                in_quote = "'''"
+                current_lit = ["'''"]
+                i += 3
+                continue
+
+        if language == "python" and in_quote in ['"""', "'''"]:
+            target = in_quote
+            if i + 2 < n and line[i:i+3] == target:
+                current_lit.append(target)
+                literals.append("".join(current_lit))
+                in_quote = None
+                i += 3
+                continue
+            else:
+                current_lit.append(chars[i])
+                i += 1
+                continue
+
+        if not in_quote:
+            if chars[i] in ["'", '"']:
+                in_quote = chars[i]
+                current_lit = [chars[i]]
+                i += 1
+                continue
+        else:
+            current_lit.append(chars[i])
+            if chars[i] == in_quote:
+                literals.append("".join(current_lit))
+                in_quote = None
+            i += 1
+            continue
+        i += 1
+    return literals
+
+
+def is_hardcoded_secret_candidate(literal: str) -> bool:
+    val = literal.strip("\"'")
+    if len(val) < 8:
+        return False
+
+    # Check AWS API keys or other high-entropy formats
+    if re.match(r'^AKIA[A-Z0-9]{16}$', val):
+        return True
+
+    # Standard secrets typically don't have spaces
+    if " " in val:
+        return False
+
+    # Standard passwords/keys
+    if re.search(r'(?i)(password|passwd|secret|api_key|private_key|token)', val):
+        return True
+
+    entropy = calculate_entropy(val)
+    if len(val) >= 16 and entropy > 3.8:
+        # Check if it has mixed characters to avoid plain text strings
+        has_upper = any(c.isupper() for c in val)
+        has_lower = any(c.islower() for c in val)
+        has_digit = any(c.isdigit() for c in val)
+        if (has_upper and has_lower) or (has_lower and has_digit) or (has_upper and has_digit):
+            # Exclude paths and URLs
+            if "/" not in val and "\\" not in val and ":" not in val:
+                return True
+
+    return False
+
+
+def redact_secret_literal(literal: str) -> str:
+    if not literal:
+        return literal
+
+    quote = ""
+    if literal.startswith("'''") and literal.endswith("'''"):
+        quote = "'''"
+    elif literal.startswith('"""') and literal.endswith('"""'):
+        quote = '"""'
+    elif literal.startswith("'") and literal.endswith("'"):
+        quote = "'"
+    elif literal.startswith('"') and literal.endswith('"'):
+        quote = '"'
+
+    val = literal.strip("\"'")
+    if len(val) <= 8:
+        redacted = "********"
+    else:
+        redacted = val[:4] + "..." + val[-4:] + " (REDACTED)"
+    return f"{quote}{redacted}{quote}"
+
+
+def _redact_all_secrets_in_text(text: str, language: str) -> str:
+    redacted = text
+    literals = _extract_string_literals(text, language)
+    for lit in literals:
+        if is_hardcoded_secret_candidate(lit):
+            red = redact_secret_literal(lit)
+            redacted = redacted.replace(lit, red)
+    return redacted
 
 
 def normalize_relative_path(file_path: Union[str, Path], root_dir: Optional[Union[str, Path]] = None) -> str:
@@ -92,12 +221,16 @@ class CryptoAsset:
     ) -> "CryptoAsset":
         norm_path = normalize_relative_path(file_path, root_dir=root_dir)
 
+        redacted_snippet = _redact_all_secrets_in_text(code_snippet, language)
+
         if evidence is None:
             evidence = Evidence(
-                code_snippet=code_snippet.strip(),
+                code_snippet=redacted_snippet.strip(),
                 detection_mechanism=detection_mechanism,
                 matched_rule_id=matched_rule_id,
             )
+        else:
+            evidence.code_snippet = _redact_all_secrets_in_text(evidence.code_snippet, language).strip()
 
         if not asset_id:
             raw_key = f"{norm_path}:{line_number}:{algorithm.upper()}:{library.lower()}:{evidence.matched_rule_id}"
