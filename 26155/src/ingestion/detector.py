@@ -22,7 +22,6 @@ Vendor = Literal["cisco", "juniper", "unknown"]
 #   "security {" – Juniper top-level security block.  Same rationale.
 #
 # Markers deliberately NOT used:
-#   "hostname"   – Cisco uses "hostname"; Juniper uses "host-name".  Ambiguous.
 #   "version X;" – The semicolon-terminated form could overlap with IOS banners
 #               or other configs; excluded to avoid false positives.
 # ---------------------------------------------------------------------------
@@ -37,6 +36,8 @@ _JUNIPER_LOWER_MARKERS = (
     "security {",
     "routing-options {",
     "protocols {",
+    "authentication-order",
+    "root-authentication",
 )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ _CISCO_LOWER_MARKERS = (
     "enable secret ", # Privileged credential
     "ip ssh version ",# SSH version directive
 )
+
 
 
 def detect_vendor(config: str) -> Vendor:
@@ -95,5 +97,8 @@ def detect_vendor(config: str) -> Vendor:
         for marker in _JUNIPER_LOWER_MARKERS:
             if normalized == marker.rstrip() or normalized.startswith(marker):
                 return "juniper"
+
+        if normalized.startswith("host-name ") and normalized.endswith(";"):
+            return "juniper"
 
     return "unknown"

@@ -94,7 +94,6 @@ class TestDetectVendor:
         """An empty string cannot be attributed to any vendor."""
         assert detect_vendor("") == "unknown"
 
-
 class TestDetectVendorJuniper:
     """Juniper JunOS detection tests for :func:`src.ingestion.detector.detect_vendor`."""
 
@@ -130,6 +129,21 @@ class TestDetectVendorJuniper:
         config = "protocols {\n    ospf {\n    }\n}\n"
         assert detect_vendor(config) == "juniper"
 
+    def test_detects_juniper_from_hostname(self) -> None:
+        """A Junos ``host-name`` directive with semicolon is detected."""
+        config = "    host-name LAB-SRX-01;\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_detects_juniper_from_authentication_order(self) -> None:
+        """``authentication-order`` is a Junos-specific directive."""
+        config = "authentication-order [ radius password ];\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_detects_juniper_from_root_authentication(self) -> None:
+        """``root-authentication`` is a Junos-specific directive."""
+        config = "root-authentication {\n"
+        assert detect_vendor(config) == "juniper"
+
     def test_detects_juniper_fixture(self) -> None:
         """The canonical Juniper fixture file is detected as juniper."""
         fixture = (
@@ -151,6 +165,18 @@ class TestDetectVendorJuniper:
         config = "# This is some config\nhostname R1\n"
         # Cisco hostname marker triggers first
         assert detect_vendor(config) == "cisco"
+
+    def test_structured_non_network_config_returns_unknown(self) -> None:
+        """Content with braces but no known markers is not falsely classified."""
+        config = "{\n    key value;\n    other setting;\n}\n"
+        # Bare '{' is a closing/opening brace without a block name prefix
+        # matching our markers — should remain unknown.
+        assert detect_vendor(config) == "unknown"
+
+    def test_returns_unknown_for_generic_braces(self) -> None:
+        """Generic braces without Junos keywords are unknown."""
+        config = "custom_block {\n    some_value 123;\n}\n"
+        assert detect_vendor(config) == "unknown"
 
     # ---- Ambiguous / mixed-marker behaviour --------------------------------
 
@@ -181,13 +207,6 @@ class TestDetectVendorJuniper:
     def test_only_whitespace_returns_unknown(self) -> None:
         """Whitespace-only content is unattributable."""
         assert detect_vendor("   \n   \n") == "unknown"
-
-    def test_structured_non_network_config_returns_unknown(self) -> None:
-        """Content with braces but no known markers is not falsely classified."""
-        config = "{\n    key value;\n    other setting;\n}\n"
-        # Bare '{' is a closing/opening brace without a block name prefix
-        # matching our markers — should remain unknown.
-        assert detect_vendor(config) == "unknown"
 
     # ---- Case handling -----------------------------------------------------
 

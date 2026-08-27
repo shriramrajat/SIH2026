@@ -31,7 +31,7 @@ The following candidates were selected based on the extraction capabilities of t
 3. **SSH-002 — SSH Authentication Retries Must Be Limited**
    - **Security purpose:** Prevent SSH brute-forcing.
    - **Cisco rep:** `global_item` with key `ip` (value starting with `ssh authentication-retries`).
-   - **Juniper rep:** `ConfigItem` with key `connection-limit` in the `system` section.
+   - **Juniper rep:** `ConfigItem` with key `tries-before-disconnect` in the `system` section. The roadmap's earlier `connection-limit` mapping is a concurrent-connection limit, not an authentication-retry setting.
 4. **TIME-001 — Timezone Must Be UTC**
    - **Security purpose:** Ensure globally consistent log correlation.
    - **Cisco rep:** `global_item` with key `clock`.
@@ -48,6 +48,19 @@ The following candidates were selected based on the extraction capabilities of t
    - **Security purpose:** Accurate time synchronization.
    - **Cisco rep:** `global_item` with key `ntp`.
    - **Juniper rep:** `ConfigItem` with key `server` in `system`. (Highly ambiguous due to Juniper parser flattening, as it overlaps with DNS `name-server`).
+
+### SSH-002 Semantics
+
+SSH authentication retries are compliant when the configured value is between
+1 and 3 attempts, inclusive. Values above 3 fail; zero, non-numeric, missing,
+or ambiguous values require review or fail when the required directive is
+absent. Multiple matching directives use worst-case aggregation: FAIL takes
+precedence over NEEDS_REVIEW, which takes precedence over PASS.
+
+The Cisco parser exposes `ip ssh authentication-retries N` as `key="ip"`
+with the remainder in `value`. Junos exposes the corresponding SSH setting as
+`tries-before-disconnect N` under `system > services > ssh`; `connection-limit`
+is a concurrent-connection limit and is not used for this control.
 
 ---
 

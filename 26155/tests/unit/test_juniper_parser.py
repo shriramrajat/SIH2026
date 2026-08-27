@@ -257,6 +257,52 @@ class TestNestedBlocks:
         assert "description" in item_keys
         assert "address" in item_keys
 
+    def test_nested_items_capture_path(self) -> None:
+        """Items retain their nested path context."""
+        config = (
+            "system {\n"
+            "    services {\n"
+            "        ssh {\n"
+            "            retry-options {\n"
+            "                tries-before-disconnect 3;\n"
+            "            }\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        result = parse_juniper(config)
+        system = result.get_section("system")
+        assert system is not None
+        item = system.items[0]
+        assert item.key == "tries-before-disconnect"
+        assert item.path == ("services", "ssh", "retry-options")
+
+    def test_sibling_blocks_do_not_leak_path(self) -> None:
+        """Sibling blocks produce distinct paths."""
+        config = (
+            "system {\n"
+            "    services {\n"
+            "        ssh {\n"
+            "            retry-options {\n"
+            "                tries-before-disconnect 3;\n"
+            "            }\n"
+            "        }\n"
+            "        telnet {\n"
+            "            retry-options {\n"
+            "                tries-before-disconnect 10;\n"
+            "            }\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        result = parse_juniper(config)
+        system = result.get_section("system")
+        assert system is not None
+        items = system.items
+        assert len(items) == 2
+        assert items[0].path == ("services", "ssh", "retry-options")
+        assert items[1].path == ("services", "telnet", "retry-options")
+
 
 # ---------------------------------------------------------------------------
 # Comment and blank-line handling
