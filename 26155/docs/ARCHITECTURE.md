@@ -38,17 +38,19 @@ flowchart TD
 | Module | File | Responsibility |
 |---|---|---|
 | **Ingestion** | `src/ingestion/loader.py` | Accept file path, validate, return UTF-8 text |
-| **Vendor Detection** | `src/ingestion/detector.py` | Inspect raw text → `"cisco"` or `"unknown"` |
+| **Vendor Detection** | `src/ingestion/detector.py` | Inspect raw text → `"cisco"`, `"juniper"`, or `"unknown"` |
 | **Cisco Parser** | `src/parsers/cisco.py` | Parse Cisco IOS text → `NormalizedConfig` |
 | **Juniper Parser** | `src/parsers/juniper.py` | Parse JunOS text → `NormalizedConfig` |
 | **Normalization Model** | `src/normalization/model.py` | `NormalizedConfig`, `ConfigSection`, `ConfigItem` |
-| **Compliance Engine** | `src/compliance/engine.py` | `audit(config, rules)` → `list[ComplianceResult]` |
+| **Compliance Engine** | `src/compliance/engine.py` | `audit(config, rules)` → `list[ComplianceResult]` with per-rule exception isolation |
+| **Rule Registry** | `src/compliance/registry.py` | `RULE_REGISTRY` — pre-instantiated list of all active rules |
 | **Compliance Model** | `src/compliance/model.py` | `ComplianceResult`, `Evidence`, `Remediation`, `Severity`, `ComplianceStatus` |
 | **Rule Base** | `src/compliance/rules/base.py` | `SecurityControl` (metadata), `ComplianceRule` (abstract evaluator) |
 | **SSH-001** | `src/compliance/rules/ssh_version.py` | SSH protocol version check |
 | **TLN-001** | `src/compliance/rules/telnet_disabled.py` | Telnet disabled check |
 | **EXEC-001** | `src/compliance/rules/exec_timeout.py` | VTY idle session timeout check |
 | **PWD-001** | `src/compliance/rules/pwd_encryption.py` | Privileged password hashing check |
+| **AAA-001** | `src/compliance/rules/aaa.py` | Remote AAA authentication primacy check |
 
 ---
 
@@ -71,11 +73,12 @@ class ConfigSection:
 
 @dataclass
 class NormalizedConfig:
-    vendor: str                   # "cisco" | "juniper"
+    vendor: str                    # "cisco" | "juniper"
     hostname: str | None
-    sections: list[ConfigSection] # top-level blocks
+    sections: list[ConfigSection]  # top-level blocks
     global_items: list[ConfigItem] # directives outside any block
-    raw_config: str               # original text for traceability
+    raw_config: str                # original text for traceability
+    source_file: str | None        # path to source file; None when parsed from a string
 ```
 
 ---
@@ -112,18 +115,56 @@ item.value   = "v2"
 
 Comment stripping: lines starting with `#` or `##` are skipped.
 
+### Known Limitation: Juniper Path Flattening
+
+All items at depth ≥ 2 are attached to the enclosing **top-level** section without preserving
+the intermediate block hierarchy. For example:
+
+```
+system { services { ssh { protocol-version v2; } telnet; } }
+```
+
+Produces `system.items = [ConfigItem(key="protocol-version", ...), ConfigItem(key="telnet", ...)]`.
+
+The `protocol-version` item has **no path information** indicating it came from the `ssh` sub-block.
+Rules must rely on the uniqueness of key names across sibling blocks. This is an accepted trade-off
+for the current implementation; path tracking is deferred to a future version.
+
 ---
 
 ## Compliance Engine
 
+The engine evaluates each rule in isolation with exception protection:
+
 ```python
 def audit(config: NormalizedConfig, rules: list[ComplianceRule]) -> list[ComplianceResult]:
-    return [rule.evaluate(config) for rule in rules]
+    results = []
+    for rule in rules:
+        try:
+            results.append(rule.evaluate(config))
+        except Exception:
+            results.append(<NEEDS_REVIEW result with traceback in evidence>)
+    return results
 ```
 
-- One result per rule, in the same order as `rules`.
+- **One result per rule**, in the same order as `rules`. Results are never omitted.
+- **Exception isolation:** a crashing rule produces a `NEEDS_REVIEW` result with the full
+  traceback in `evidence[0].note`. Other rules in the list continue to run.
 - The engine has no awareness of individual rules or vendors.
 - All vendor-specific extraction logic lives inside each `ComplianceRule` subclass.
+
+### Rule Registry
+
+Use `RULE_REGISTRY` from `src.compliance.registry` to run all active rules:
+
+```python
+from src.compliance.registry import RULE_REGISTRY
+from src.compliance.engine import audit
+
+results = audit(config, RULE_REGISTRY)
+```
+
+To add a new rule: implement the class → add one instance to `RULE_REGISTRY` → add tests.
 
 ---
 
@@ -219,3 +260,18 @@ Evidence is collected per-section.
 | `NOT_APPLICABLE` is a valid result (not an error) | Safe operation across heterogeneous inventories |
 | `Remediation.config_hint` is advisory only | Prevents accidental automated config changes |
 | Juniper parser uses brace-depth counter | Avoids recursion issues on deeply nested configs |
+| Engine uses per-rule exception isolation | One broken rule cannot abort the entire scan |
+| `NormalizedConfig.source_file` is optional (default `None`) | Backward compatible; enables finding traceability when a file path is known |
+| Juniper path flattening is a documented trade-off | Adds path tracking is deferred; current rules work via key-name uniqueness |
+
+---
+
+## Limitations (Current Version)
+
+| Limitation | Impact | Deferred To |
+|---|---|---|
+| Juniper nested blocks have no path tracking | Rules rely on key uniqueness across sibling blocks | Future version |
+| Cisco `ip X Y Z` → `key="ip"` | Rules must use `value.startswith()` heuristics | Future version |
+| No line numbers in evidence | Frontend cannot link a finding to an exact line | Future version |
+| `detect_vendor()` uses first-match | Ambiguous configs resolve to the first vendor matched | Acceptable |
+| Juniper detection markers are a finite set | Unusual JunOS-only configs may not be detected | Extend markers if needed |

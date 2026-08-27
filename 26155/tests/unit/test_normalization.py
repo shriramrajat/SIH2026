@@ -136,3 +136,23 @@ class TestNormalizedConfig:
         """Vendor field supports any string — future parsers can use their own."""
         cfg = NormalizedConfig(vendor="future-vendor", hostname=None)
         assert cfg.vendor == "future-vendor"
+
+    def test_source_file_defaults_to_none(self) -> None:
+        """source_file is None by default — backward compatibility."""
+        cfg = NormalizedConfig(vendor="cisco", hostname=None)
+        assert cfg.source_file is None
+
+    def test_source_file_can_be_set(self) -> None:
+        """source_file accepts a string path."""
+        cfg = NormalizedConfig(
+            vendor="cisco",
+            hostname="LAB-ROUTER",
+            source_file="/etc/configs/router.conf",
+        )
+        assert cfg.source_file == "/etc/configs/router.conf"
+
+    def test_source_file_is_preserved(self) -> None:
+        """source_file value is stored and retrievable."""
+        path = "configs/juniper-srx.conf"
+        cfg = NormalizedConfig(vendor="juniper", hostname=None, source_file=path)
+        assert cfg.source_file == path
