@@ -91,6 +91,7 @@ Source Directory / File
 | Module | File | Responsibility |
 |---|---|---|
 | **Models** | `src/ecdat/models.py` | `CryptoAsset`, `Evidence` dataclasses; deterministic asset ID generation; path normalisation |
+| **Risk** | `src/ecdat/risk.py` | `RiskAssessment`, `QuantumThreat`, `PQCRecommendation`; deterministic risk classification |
 | **Scanner** | `src/ecdat/scanner.py` | File discovery, comment stripping, `scan_file()` / `scan()` orchestration, Java/C regex scanning, AST+regex deduplication |
 | **Rules** | `src/ecdat/rules.py` | `RegexRule` dataclass; `REGEX_RULES` list covering Python, Java, C/C++, PEM patterns |
 | **AST Parser** | `src/ecdat/ast_parser.py` | `PythonASTScanner` (`ast.NodeVisitor`); `scan_python_ast()` entry point |
@@ -245,7 +246,7 @@ The scanner skips the following directories by default:
 
 ## Testing
 
-**Current test count: 13 tests, all passing.**
+**Current test count: 40 tests, all passing.**
 
 Run via:
 
@@ -322,8 +323,6 @@ for asset in assets:
 2. **Multi-line expressions in Java/C:** Regex detection operates line-by-line. Function calls split across multiple lines may not be fully matched.
 3. **Binary inspection:** Out of scope. Only plain-text source files are scanned.
 4. **No CBOM output:** Structured CycloneDX CBOM generation is not yet implemented (planned Phase 3 — Matin's area).
-5. **No quantum risk scoring:** Risk assessment against Shor's/Grover's algorithms is not yet implemented.
-6. **No hardcoded-secret detection:** Scanning for hardcoded API keys, passwords, or tokens is not currently implemented.
 
 ---
 

@@ -17,7 +17,7 @@ Quantum computers running **Grover's Algorithm** provide a quadratic speedup for
 | :--- | :--- | :--- | :--- |
 | **CRITICAL** | Asymmetric algorithm broken by Shor's algorithm. | RSA (all key sizes), ECC (P-256, Ed25519), DH, DSA | Immediate migration planning to PQC (ML-KEM / ML-DSA). |
 | **HIGH** | Legacy / Broken classical algorithm (vulnerable to classical attacks). | MD5, SHA-1, DES, 3DES, RC4 | Immediate replacement with secure classical primitives (SHA-256/3, AES-GCM). |
-| **MEDIUM** | Symmetric algorithm vulnerable to Grover's algorithm reduction. | AES-128, 3-Key Triple DES | Upgrade key size to 256 bits (AES-256). |
+| **MEDIUM** | Symmetric algorithm vulnerable to Grover's algorithm reduction. | AES-128 | Upgrade key size to 256 bits (AES-256). |
 | **SAFE / PQC** | Quantum-resistant algorithms & NIST-standardized PQC primitives. | AES-256, SHA-3, ML-KEM (Kyber), ML-DSA (Dilithium), SLH-DSA (SPHINCS+) | Compliant with Post-Quantum Standards. |
 
 ---
@@ -29,7 +29,7 @@ Quantum computers running **Grover's Algorithm** provide a quadratic speedup for
 ECDAT keeps discovery and interpretation separate. The scanner continues to
 produce `CryptoAsset` objects, while `ecdat.risk.classify_asset()` returns a
 structured `RiskAssessment` containing `severity`, `reason`,
-`recommendation`, and `confidence`. Classification reads only structured
+`confidence`, `quantum_threat`, and `pqc_recommendation`. Classification reads only structured
 asset metadata and never copies code snippets or secret values into the risk
 output.
 
@@ -37,8 +37,7 @@ The classifier uses these deterministic rules:
 
 - Hardcoded secrets are `CRITICAL`.
 - MD5, SHA-1, DES, 3DES, and RC4 are `HIGH`.
-- RSA keys below 2048 bits are `HIGH`; RSA and other asymmetric primitives are
-	`CRITICAL` for quantum migration planning.
+- RSA and other asymmetric primitives are `CRITICAL` for quantum migration planning (including RSA keys below 2048 bits).
 - AES-128 and unauthenticated or incomplete AES configurations are `MEDIUM`.
 - AES-256 with a recognized modern mode is `LOW`.
 - SHA-256 and SHA-512 are `INFO`.
