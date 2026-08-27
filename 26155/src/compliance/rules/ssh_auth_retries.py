@@ -149,6 +149,7 @@ class SshAuthRetriesRule(ComplianceRule):
         items = [
             item for item in system.items
             if item.key.lower() == "tries-before-disconnect"
+            and item.path == ("services", "ssh", "retry-options")
         ]
         if not items:
             return self._build_result(

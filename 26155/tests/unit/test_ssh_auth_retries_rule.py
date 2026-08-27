@@ -74,6 +74,15 @@ def test_juniper_excessive_retries_fails_with_one_remediation() -> None:
     assert result.remediations[0].vendor == "juniper"
 
 
+def test_juniper_ignores_unrelated_tries_before_disconnect() -> None:
+    # Telnet tries-before-disconnect is 10, but SSH is missing.
+    # The rule must NOT treat the telnet setting as SSH configuration.
+    config = "system {\n services {\n  telnet {\n   retry-options {\n    tries-before-disconnect 10;\n   }\n  }\n }\n}\n"
+    result = RULE.evaluate(parse_juniper(config))
+    assert result.status == ComplianceStatus.FAIL
+    assert result.evidence[0].raw_lines == ()
+
+
 def test_juniper_missing_configuration_fails() -> None:
     result = RULE.evaluate(parse_juniper("system {\n host-name J1;\n}\n"))
     assert result.status == ComplianceStatus.FAIL
@@ -84,7 +93,7 @@ def test_juniper_malformed_value_needs_review() -> None:
     config = NormalizedConfig(
         vendor="juniper",
         hostname="J1",
-        sections=[ConfigSection("system", [ConfigItem("tries-before-disconnect", "many", "tries-before-disconnect many;")])],
+        sections=[ConfigSection("system", [ConfigItem("tries-before-disconnect", "many", "tries-before-disconnect many;", path=("services", "ssh", "retry-options"))])],
     )
     result = RULE.evaluate(config)
     assert result.status == ComplianceStatus.NEEDS_REVIEW
@@ -97,8 +106,8 @@ def test_juniper_duplicate_directives_use_worst_case() -> None:
         vendor="juniper",
         hostname="J1",
         sections=[ConfigSection("system", [
-            ConfigItem("tries-before-disconnect", "3", "tries-before-disconnect 3;"),
-            ConfigItem("tries-before-disconnect", "4", "tries-before-disconnect 4;"),
+            ConfigItem("tries-before-disconnect", "3", "tries-before-disconnect 3;", path=("services", "ssh", "retry-options")),
+            ConfigItem("tries-before-disconnect", "4", "tries-before-disconnect 4;", path=("services", "ssh", "retry-options")),
         ])],
     )
     result = RULE.evaluate(config)
