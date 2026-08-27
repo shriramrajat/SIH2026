@@ -25,7 +25,7 @@ flowchart TD
 
 | Component | Responsibility | Tech / Module |
 | :--- | :--- | :--- |
-| **File Discovery Engine** | Recursively traverses directory trees, respects `.gitignore`, filters supported extensions (`.py`, `.java`, `.c`, `.cpp`, `.h`). | Python `pathlib`, `fnmatch` |
+| **File Discovery Engine** | Recursively traverses directory trees, respects hardcoded directory exclusions (e.g., `.git`, `node_modules`), filters supported extensions (`.py`, `.java`, `.c`, `.cpp`, `.h`). | Python `pathlib`, `fnmatch` |
 | **Detection Engine** | Dual-mode parsing: Fast regex matching for pattern signatures + AST (Abstract Syntax Tree) parsing for structural analysis. | Python `ast`, `re` |
 | **Asset Normalizer** | Converts raw detection matches into uniform ECDAT Cryptographic Asset objects. | Pydantic / Python dataclasses |
 | **Quantum Risk Engine** | Evaluates algorithm susceptibility against Shor's & Grover's algorithms based on key sizes and parameters. | Deterministic Risk Matrix Rulebook |
@@ -50,5 +50,5 @@ flowchart TD
 ### 4. Architectural Guiding Rules (Aligned with Team Leadership)
 
 1. **Deterministic Logic Over LLMs**: Cryptographic asset identification, risk scoring, and PQC recommendations must be 100% deterministic and rule-backed. LLMs are NOT used for security classification.
-2. **Modular File Structure**: Keep detection rules separated by language (`rules_python.py`, `rules_java.py`, `rules_c.py`).
+2. **Modular File Structure**: Keep detection rules centralized but cleanly separated by language tag (`rules.py`).
 3. **No Hardcoded State**: Configurable detection patterns and risk tables stored in clean Python data modules or JSON configurations.

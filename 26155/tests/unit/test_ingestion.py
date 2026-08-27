@@ -93,3 +93,33 @@ class TestDetectVendor:
     def test_returns_unknown_for_empty_string(self) -> None:
         """An empty string cannot be attributed to any vendor."""
         assert detect_vendor("") == "unknown"
+
+    def test_detects_juniper_from_system_block(self) -> None:
+        """A ``system {`` block is a reliable Juniper indicator."""
+        config = "system {\n    host-name LAB-SRX;\n}\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_detects_juniper_from_hostname(self) -> None:
+        """A Junos ``host-name`` directive with semicolon is detected."""
+        config = "    host-name LAB-SRX-01;\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_detects_juniper_from_authentication_order(self) -> None:
+        """``authentication-order`` is a Junos-specific directive."""
+        config = "authentication-order [ radius password ];\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_detects_juniper_from_root_authentication(self) -> None:
+        """``root-authentication`` is a Junos-specific directive."""
+        config = "root-authentication {\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_detects_juniper_from_interfaces_block(self) -> None:
+        """``interfaces {`` is a Junos-specific block."""
+        config = "interfaces {\n    ge-0/0/0 {\n"
+        assert detect_vendor(config) == "juniper"
+
+    def test_returns_unknown_for_generic_braces(self) -> None:
+        """Generic braces without Junos keywords are unknown."""
+        config = "custom_block {\n    some_value 123;\n}\n"
+        assert detect_vendor(config) == "unknown"

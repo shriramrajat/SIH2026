@@ -150,6 +150,16 @@ REGEX_RULES: List[RegexRule] = [
         confidence=0.80,
     ),
     RegexRule(
+        rule_id="py-hashlib-sha3",
+        name="Python hashlib SHA-3",
+        language="python",
+        pattern=re.compile(r"\bhashlib\.sha3_(256|512)\s*\("),
+        algorithm="SHA-3",
+        category="hashing",
+        library="hashlib",
+        confidence=0.80,
+    ),
+    RegexRule(
         rule_id="py-crypto-rsa-gen",
         name="Python PyCryptodome RSA Generate",
         language="python",
@@ -241,6 +251,26 @@ REGEX_RULES: List[RegexRule] = [
         algorithm="SHA-256",  # Dynamically parsed
         category="hashing",
         library="java.security",
+        confidence=0.80,
+    ),
+    RegexRule(
+        rule_id="java-signature-instance",
+        name="Java Signature getInstance",
+        language="java",
+        pattern=re.compile(r'\bSignature\.getInstance\s*\(\s*"([^"]+)"\s*\)'),
+        algorithm="Signature",  # Dynamically parsed
+        category="digital_signature",
+        library="java.security",
+        confidence=0.80,
+    ),
+    RegexRule(
+        rule_id="java-keyagreement-instance",
+        name="Java KeyAgreement getInstance",
+        language="java",
+        pattern=re.compile(r'\bKeyAgreement\.getInstance\s*\(\s*"([^"]+)"\s*\)'),
+        algorithm="ECDH",  # Dynamically parsed
+        category="key_exchange",
+        library="javax.crypto",
         confidence=0.80,
     ),
     RegexRule(
@@ -341,6 +371,16 @@ REGEX_RULES: List[RegexRule] = [
         pattern=re.compile(r"\bDH_new\s*\("),
         algorithm="DH",
         category="key_exchange",
+        library="OpenSSL",
+        confidence=0.80,
+    ),
+    RegexRule(
+        rule_id="c-openssl-dsa-new",
+        name="C/C++ OpenSSL DSA New",
+        language="c",
+        pattern=re.compile(r"\bDSA_new\s*\("),
+        algorithm="DSA",
+        category="asymmetric_encryption",
         library="OpenSSL",
         confidence=0.80,
     ),

@@ -93,7 +93,10 @@ class PwdEncryptionRule(ComplianceRule):
 
         for item in enable_items:
             val = item.value or ""
-            safe_val, safe_raw = self._sanitize(val, item.raw_line)
+            if not item.value:
+                safe_val, safe_raw = "[REDACTED]", "[REDACTED]"
+            else:
+                safe_val, safe_raw = self._sanitize(val, item.raw_line)
 
             if val.startswith("secret 8") or val.startswith("secret 9"):
                 has_strong = True
@@ -195,14 +198,14 @@ class PwdEncryptionRule(ComplianceRule):
 
         for item in items:
             val = item.value
-            if val is None:
+            if not val:
                 has_unknown = True
                 evidence_list.append(
                     Evidence(
                         control_id=self.control.control_id,
                         section_name="system",
-                        raw_lines=(item.raw_line,),
-                        observed=None,
+                        raw_lines=("[REDACTED]",),
+                        observed="[REDACTED]",
                         expected="Strong hashing mechanism",
                         note="The 'encrypted-password' directive is empty.",
                     )

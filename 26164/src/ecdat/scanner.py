@@ -280,6 +280,9 @@ class Scanner:
                         parts = transform.split("/")
                         if len(parts) >= 1:
                             algorithm = parts[0].upper()
+                            if algorithm == "DESEDE":
+                                algorithm = "3DES"
+
                             if algorithm in ["RSA", "EC", "DSA", "DH"]:
                                 category = "asymmetric_encryption"
                             elif algorithm in ["AES", "DES", "3DES"]:
@@ -298,6 +301,23 @@ class Scanner:
                         algo_match = match.group(1).upper()
                         algorithm = algo_match
                         category = "hashing"
+
+                    elif rule.rule_id == "java-keyagreement-instance":
+                        algo_match = match.group(1).upper()
+                        algorithm = algo_match
+                        category = "key_exchange"
+
+                    elif rule.rule_id == "java-signature-instance":
+                        algo_match = match.group(1).upper()
+                        if "ECDSA" in algo_match:
+                            algorithm = "ECDSA"
+                        elif "DSA" in algo_match:
+                            algorithm = "DSA"
+                        elif "RSA" in algo_match:
+                            algorithm = "RSA"
+                        else:
+                            algorithm = algo_match
+                        category = "digital_signature"
 
                     # Dynamic parsing for Python RSA.generate regex
                     elif rule.rule_id == "py-crypto-rsa-gen":
