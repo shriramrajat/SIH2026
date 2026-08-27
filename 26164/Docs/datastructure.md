@@ -5,12 +5,12 @@
 
 ### 1. Internal Asset Data Model
 
-Before exporting to CycloneDX 1.6, ECDAT normalizes all discovered cryptographic occurrences into a uniform internal JSON structure:
+Before exporting to CycloneDX 1.6, ECDAT normalizes all discovered cryptographic occurrences into a uniform internal JSON structure representing the `CryptoAsset`:
 
 ```json
 {
   "asset_id": "crypto-asset-001",
-  "name": "RSA Private Key Generation",
+  "name": "RSA asset",
   "category": "asymmetric_encryption",
   "algorithm": "RSA",
   "key_length": 2048,
@@ -18,19 +18,30 @@ Before exporting to CycloneDX 1.6, ECDAT normalizes all discovered cryptographic
   "padding": "OAEP",
   "file_path": "src/auth/crypto_service.py",
   "line_number": 42,
-  "code_snippet": "key = RSA.generate(2048)",
+  "language": "python",
   "library": "PyCryptodome",
   "confidence": 0.95,
-  "quantum_risk": {
-    "status": "VULNERABLE",
-    "severity": "CRITICAL",
-    "quantum_threat": "Broken by Shor's Algorithm",
-    "grace_period_years": 0
-  },
+  "evidence": {
+    "code_snippet": "key = RSA.generate(2048)",
+    "detection_mechanism": "ast",
+    "matched_rule_id": "py-ast-rsa-gen"
+  }
+}
+```
+
+The analysis layer produces a separate `RiskAssessment` correlated by `asset_id`:
+
+```json
+{
+  "asset_id": "crypto-asset-001",
+  "severity": "critical",
+  "reason": "RSA key length 2048 is below the 2048 bit minimum and is vulnerable to Shor's algorithm.",
+  "confidence": 0.95,
+  "quantum_threat": "shor",
   "pqc_recommendation": {
-    "target_algorithm": "ML-KEM-768 (Kyber)",
+    "target_algorithm": "ML-KEM-768",
     "nist_standard": "FIPS 203",
-    "migration_type": "Hybrid Classical/PQC or Direct Replacement"
+    "migration_type": "Hybrid (ECDH + ML-KEM) or Direct Replacement"
   }
 }
 ```
