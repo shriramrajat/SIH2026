@@ -201,6 +201,7 @@ def parse_juniper(raw_config: str) -> NormalizedConfig:
 
     current_section: ConfigSection | None = None
     depth: int = 0  # brace nesting depth
+    path_stack: list[str] = []
 
     for line in lines:
         if _is_noise(line):
@@ -212,10 +213,14 @@ def parse_juniper(raw_config: str) -> NormalizedConfig:
             if depth < 0:
                 # Malformed / truncated config — reset gracefully.
                 depth = 0
+                path_stack.clear()
+            elif path_stack:
+                path_stack.pop()
             if depth == 0 and current_section is not None:
                 # Top-level block is closing; flush the current section.
                 sections.append(current_section)
                 current_section = None
+                path_stack.clear()
             # Braces never become config items.
             continue
 
@@ -229,7 +234,10 @@ def parse_juniper(raw_config: str) -> NormalizedConfig:
                 if current_section is not None:
                     sections.append(current_section)
                 current_section = ConfigSection(name=block_name)
-            # Depth >= 2: nested block — children attach to current section.
+                path_stack.clear()
+            else:
+                # Depth >= 2: nested block — children attach to current section.
+                path_stack.append(block_name)
             continue
 
         # ---- leaf / directive ----------------------------------------------
@@ -241,6 +249,7 @@ def parse_juniper(raw_config: str) -> NormalizedConfig:
             # True global directive (rare in JunOS, e.g. bare ``version``).
             global_items.append(item)
         else:
+            item.path = tuple(path_stack)
             if current_section is not None:
                 current_section.items.append(item)
             else:

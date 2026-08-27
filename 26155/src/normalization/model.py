@@ -35,11 +35,21 @@ class ConfigItem:
     raw_line:
         The original, unmodified source line.  Useful for debugging and
         for producing diffs against the original file.
+    path:
+        Hierarchical block ancestry for items parsed from Juniper JunOS
+        configurations.  Each element is the name of a nested block that
+        encloses this item, ordered from outermost to innermost (e.g.
+        ``("services", "ssh", "retry-options")`` for a directive inside
+        ``system { services { ssh { retry-options { ... } } } }``).  For
+        Cisco items and for Juniper items at the first level of a block,
+        this tuple is empty.  Do not use this field in compliance logic
+        for non-Juniper vendors.
     """
 
     key: str
     value: str | None
     raw_line: str
+    path: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass
