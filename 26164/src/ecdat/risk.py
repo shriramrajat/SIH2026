@@ -1,6 +1,8 @@
 """Deterministic risk classification for discovered cryptographic assets."""
 
-from dataclasses import asdict, dataclass
+from pydantic import BaseModel, Field
+from pydantic.dataclasses import dataclass
+from dataclasses import asdict
 from enum import Enum
 from typing import Iterable, List, Optional
 
@@ -26,7 +28,7 @@ class QuantumThreat(str, Enum):
     NONE = "none"
 
 
-@dataclass(frozen=True)
+@dataclass
 class PQCRecommendation:
     """Structured Post-Quantum Cryptography migration recommendation."""
     target_algorithm: str
@@ -37,8 +39,7 @@ class PQCRecommendation:
         return asdict(self)
 
 
-@dataclass(frozen=True)
-class RiskAssessment:
+class RiskAssessment(BaseModel):
     """Structured, secret-free interpretation of one cryptographic asset."""
     asset_id: str
     severity: RiskSeverity
@@ -49,7 +50,7 @@ class RiskAssessment:
 
     def to_dict(self) -> dict:
         """Return a serialization-friendly representation."""
-        result = asdict(self)
+        result = self.model_dump()
         result["severity"] = self.severity.value
         result["quantum_threat"] = self.quantum_threat.value
         if self.pqc_recommendation:
@@ -244,4 +245,19 @@ def classify_asset(asset: CryptoAsset) -> RiskAssessment:
 
 def classify_assets(assets: Iterable[CryptoAsset]) -> List[RiskAssessment]:
     """Classify assets in input order without changing the assets."""
-    return [classify_asset(asset) for asset in assets]
+    results = []
+    for asset in assets:
+        try:
+            results.append(classify_asset(asset))
+        except Exception as e:
+            aid = getattr(asset, "asset_id", "unknown-asset-id")
+            results.append(
+                _assessment(
+                    asset_id=aid,
+                    severity=RiskSeverity.MEDIUM,
+                    reason=f"Classification encountered an internal error: {e}",
+                    confidence=0.0,
+                    quantum_threat=QuantumThreat.NONE,
+                )
+            )
+    return results

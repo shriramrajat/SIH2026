@@ -4,6 +4,7 @@ Recursively scans source files for cryptographic algorithms, libraries, keys, an
 """
 
 import os
+import re
 from pathlib import Path
 from typing import List, Set, Union, Optional
 from ecdat.models import CryptoAsset
@@ -11,8 +12,9 @@ from ecdat.rules import (
     REGEX_RULES,
     RegexRule,
     is_hardcoded_secret_candidate,
-    redact_secret_literal,
+    redact_secret_literal
 )
+from ecdat.rules import REGEX_RULES, RegexRule
 from ecdat.ast_parser import scan_python_ast
 
 DEFAULT_IGNORED_DIRS: Set[str] = {
@@ -30,149 +32,99 @@ DEFAULT_IGNORED_DIRS: Set[str] = {
 SUPPORTED_EXTENSIONS: Set[str] = {".py", ".java", ".c", ".cpp", ".h", ".hpp", ".pem", ".crt", ".key"}
 
 
-def strip_comments_from_lines(content_lines: List[str], language: str) -> List[str]:
-    """
-    Strips single-line and multi-line comments from code lines while preserving
-    line positions and line count. Does not build a full language parser.
-    """
+def clean_code_and_mask_strings(content_lines: List[str], language: str) -> tuple[List[str], List[List[bool]]]:
     cleaned_lines = []
+    masks = []
     in_block_comment = False
+    in_triple_quote = None
 
     for line in content_lines:
-        if language == "python":
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                cleaned_lines.append(" " * len(line))
-                continue
-            # Strip trailing inline comments if '#' is outside string literals
-            in_single_quote = False
-            in_double_quote = False
-            comment_start = -1
-            for i, ch in enumerate(line):
-                if ch == "'" and not in_double_quote:
-                    in_single_quote = not in_single_quote
-                elif ch == '"' and not in_single_quote:
-                    in_double_quote = not in_double_quote
-                elif ch == "#" and not in_single_quote and not in_double_quote:
-                    comment_start = i
-                    break
-            if comment_start != -1:
-                cleaned_lines.append(line[:comment_start] + " " * (len(line) - comment_start))
-            else:
-                cleaned_lines.append(line)
-            continue
-
-        if language in ["java", "c", "cpp", "all", "pem"]:
-            current_chars = list(line)
-            i = 0
-            n = len(current_chars)
-            quote_char = None
-            escaped = False
-            while i < n:
-                if in_block_comment:
-                    if i + 1 < n and current_chars[i] == '*' and current_chars[i + 1] == '/':
-                        current_chars[i] = ' '
-                        current_chars[i + 1] = ' '
-                        in_block_comment = False
-                        i += 2
-                    else:
-                        current_chars[i] = ' '
-                        i += 1
-                else:
-                    ch = current_chars[i]
-                    if quote_char:
-                        if escaped:
-                            escaped = False
-                        elif ch == '\\':
-                            escaped = True
-                        elif ch == quote_char:
-                            quote_char = None
-                        i += 1
-                    elif ch in ['"', "'"]:
-                        quote_char = ch
-                        i += 1
-                    elif i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '*':
-                        current_chars[i] = ' '
-                        current_chars[i + 1] = ' '
-                        in_block_comment = True
-                        i += 2
-                    elif i + 1 < n and current_chars[i] == '/' and current_chars[i + 1] == '/':
-                        for j in range(i, n):
-                            current_chars[j] = ' '
-                        break
-                    else:
-                        i += 1
-            cleaned_lines.append("".join(current_chars))
-        else:
-            cleaned_lines.append(line)
-
-    return cleaned_lines
-
-
-def _string_literal_masks(content_lines: List[str], language: str) -> List[List[bool]]:
-    """Build per-line masks for string literal regions, preserving column positions."""
-    if language == "pem":
-        return [[False] * len(line) for line in content_lines]
-
-    masks: List[List[bool]] = []
-    triple_quote = None
-
-    for line in content_lines:
-        mask = [False] * len(line)
+        chars = list(line)
+        mask = [False] * len(chars)
+        n = len(chars)
         i = 0
-        n = len(line)
+        in_line_comment = False
+        in_quote = None
 
         while i < n:
-            if triple_quote:
-                end = line.find(triple_quote, i)
-                end_pos = n if end == -1 else end + 3
-                for pos in range(i, end_pos):
-                    mask[pos] = True
-                if end == -1:
-                    i = n
+            if in_block_comment:
+                if language in ["java", "c", "cpp", "all"] and i + 1 < n and chars[i] == '*' and chars[i+1] == '/':
+                    chars[i] = ' '
+                    chars[i+1] = ' '
+                    in_block_comment = False
+                    i += 2
                 else:
-                    triple_quote = None
-                    i = end_pos
-                continue
-
-            if language in ["python", "java"] and i + 2 < n and line[i:i + 3] in ['"""', "'''"]:
-                triple_quote = line[i:i + 3]
-                end = line.find(triple_quote, i + 3)
-                end_pos = n if end == -1 else end + 3
-                for pos in range(i, end_pos):
-                    mask[pos] = True
-                if end == -1:
-                    i = n
-                else:
-                    triple_quote = None
-                    i = end_pos
-                continue
-
-            if line[i] in ['"', "'"]:
-                quote_char = line[i]
-                start = i
-                i += 1
-                escaped = False
-                while i < n:
-                    ch = line[i]
-                    if escaped:
-                        escaped = False
-                    elif ch == "\\":
-                        escaped = True
-                    elif ch == quote_char:
-                        i += 1
-                        break
+                    chars[i] = ' '
                     i += 1
+                continue
 
-                for pos in range(start, min(i, n)):
-                    mask[pos] = True
+            if in_triple_quote:
+                mask[i] = True
+                if language == "python" and i + 2 < n and "".join(chars[i:i+3]) == in_triple_quote:
+                    mask[i+1] = True
+                    mask[i+2] = True
+                    in_triple_quote = None
+                    i += 3
+                else:
+                    i += 1
+                continue
+
+            if in_line_comment:
+                chars[i] = ' '
+                i += 1
+                continue
+
+            if in_quote:
+                mask[i] = True
+                if chars[i] == '\\' and i + 1 < n:
+                    mask[i+1] = True
+                    i += 2
+                elif chars[i] == in_quote:
+                    in_quote = None
+                    i += 1
+                else:
+                    i += 1
+                continue
+
+            if language == "python":
+                if chars[i] == '#':
+                    in_line_comment = True
+                    chars[i] = ' '
+                    i += 1
+                    continue
+                if i + 2 < n and "".join(chars[i:i+3]) in ['"""', "'''"]:
+                    in_triple_quote = "".join(chars[i:i+3])
+                    mask[i] = True
+                    mask[i+1] = True
+                    mask[i+2] = True
+                    i += 3
+                    continue
+            else:
+                if i + 1 < n and chars[i] == '/' and chars[i+1] == '/':
+                    in_line_comment = True
+                    chars[i] = ' '
+                    chars[i+1] = ' '
+                    i += 2
+                    continue
+                if i + 1 < n and chars[i] == '/' and chars[i+1] == '*':
+                    in_block_comment = True
+                    chars[i] = ' '
+                    chars[i+1] = ' '
+                    i += 2
+                    continue
+
+            if chars[i] in ['"', "'"]:
+                in_quote = chars[i]
+                mask[i] = True
+                i += 1
                 continue
 
             i += 1
 
+        cleaned_lines.append("".join(chars))
         masks.append(mask)
 
-    return masks
+    return cleaned_lines, masks
 
 
 class Scanner:
@@ -180,17 +132,36 @@ class Scanner:
         self,
         ignored_dirs: Optional[Set[str]] = None,
         root_dir: Optional[Union[str, Path]] = None,
+        max_file_size_bytes: int = 10 * 1024 * 1024,
     ):
         self.ignored_dirs = ignored_dirs or DEFAULT_IGNORED_DIRS
         self.root_dir = root_dir
+        self.max_file_size_bytes = max_file_size_bytes
+        self.errors: List[Dict[str, str]] = []
+        self.skipped_files: List[Dict[str, str]] = []
 
-    def discover_files(self, root_path: Union[str, Path]) -> List[Path]:
-        """Recursively discover supported source files while respecting ignore list."""
+    def discover_files(self, root_path: Union[str, Path], language_filters: Optional[List[str]] = None) -> List[Path]:
+        """Recursively discover supported source files while respecting ignore list and language filters."""
         path = Path(root_path).resolve()
         discovered: List[Path] = []
 
+        target_exts = SUPPORTED_EXTENSIONS
+        if language_filters:
+            lang_ext_map = {
+                "python": {".py"},
+                "java": {".java"},
+                "c": {".c", ".h"},
+                "cpp": {".cpp", ".hpp"},
+                "pem": {".pem", ".crt", ".key"}
+            }
+            valid_exts = set()
+            for lf in language_filters:
+                valid_exts.update(lang_ext_map.get(lf.lower(), set()))
+            if valid_exts:
+                target_exts = valid_exts
+
         if path.is_file():
-            if path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            if path.suffix.lower() in target_exts:
                 return [path]
             return []
 
@@ -203,7 +174,18 @@ class Scanner:
 
             for file in files:
                 file_path = Path(root) / file
-                if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+
+                if file_path.is_symlink():
+                    try:
+                        resolved_path = file_path.resolve()
+                        if not str(resolved_path).startswith(str(path)):
+                            self.skipped_files.append({"file": str(file_path), "reason": "unsafe_symlink"})
+                            continue
+                    except Exception as e:
+                        self.errors.append({"file": str(file_path), "error": f"Symlink resolution failed: {e}"})
+                        continue
+
+                if file_path.suffix.lower() in target_exts:
                     discovered.append(file_path)
 
         return sorted(discovered)
@@ -233,13 +215,9 @@ class Scanner:
         assets: List[CryptoAsset] = []
         effective_root = root_dir or self.root_dir
 
-        cleaned_lines = strip_comments_from_lines(content_lines, language)
-        string_masks = _string_literal_masks(cleaned_lines, language)
+        cleaned_lines, string_masks = clean_code_and_mask_strings(content_lines, language)
 
-        for idx, (original_line, search_line, string_mask) in enumerate(
-            zip(content_lines, cleaned_lines, string_masks),
-            start=1,
-        ):
+        for idx, (original_line, search_line, string_mask) in enumerate(zip(content_lines, cleaned_lines, string_masks), start=1):
             stripped_search = search_line.strip()
             if not stripped_search:
                 continue
@@ -251,14 +229,10 @@ class Scanner:
                     if not (rule.language == "c" and language == "cpp"):
                         continue
 
-                match = None
-                for candidate in rule.pattern.finditer(search_line):
-                    if candidate.start() < len(string_mask) and string_mask[candidate.start()]:
+                for match in rule.pattern.finditer(search_line):
+                    if match.start() < len(string_mask) and string_mask[match.start()]:
                         continue
-                    match = candidate
-                    break
 
-                if match:
                     algorithm = rule.algorithm
                     category = rule.category
                     library = rule.library
@@ -269,7 +243,7 @@ class Scanner:
                     detection_mechanism = "pem_header" if library == "PEM" else "regex"
                     code_snippet = original_line.strip()
 
-                    if rule.secret_name_group and rule.secret_value_group:
+                    if getattr(rule, "secret_name_group", None) and getattr(rule, "secret_value_group", None):
                         identifier = match.group(rule.secret_name_group)
                         literal_value = match.group(rule.secret_value_group)
                         if not is_hardcoded_secret_candidate(identifier, literal_value):
@@ -357,34 +331,44 @@ class Scanner:
         """Perform full scan on a single file combining AST and Regex detection."""
         effective_root = root_dir or self.root_dir
         try:
+            try:
+                file_size = os.path.getsize(file_path)
+                if file_size > self.max_file_size_bytes:
+                    self.skipped_files.append({"file": str(file_path), "reason": "oversized"})
+                    return []
+            except Exception as e:
+                self.errors.append({"file": str(file_path), "error": f"Failed to get file size: {e}"})
+                return []
+
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-        except Exception:
+
+            lines = content.splitlines()
+            language = self._determine_language(file_path)
+
+            regex_assets = self.scan_file_regex(file_path, lines, root_dir=effective_root)
+
+            # Run AST parser for Python files
+            if language == "python":
+                ast_assets = scan_python_ast(str(file_path), content, root_dir=effective_root)
+
+                # Deduplicate / merge AST and Regex hits on the same line, algorithm, and library
+                ast_lines_algos_libs = {(a.line_number, a.algorithm, a.library) for a in ast_assets}
+                filtered_regex_assets = [
+                    r for r in regex_assets if (r.line_number, r.algorithm, r.library) not in ast_lines_algos_libs
+                ]
+                return ast_assets + filtered_regex_assets
+
+            return regex_assets
+        except Exception as e:
+            self.errors.append({"file": str(file_path), "error": str(e)})
             return []
 
-        lines = content.splitlines()
-        language = self._determine_language(file_path)
-
-        regex_assets = self.scan_file_regex(file_path, lines, root_dir=effective_root)
-
-        # Run AST parser for Python files
-        if language == "python":
-            ast_assets = scan_python_ast(str(file_path), content, root_dir=effective_root)
-
-            # Deduplicate / merge AST and Regex hits on the same line and algorithm
-            ast_lines_algos = {(a.line_number, a.algorithm) for a in ast_assets}
-            filtered_regex_assets = [
-                r for r in regex_assets if (r.line_number, r.algorithm) not in ast_lines_algos
-            ]
-            return ast_assets + filtered_regex_assets
-
-        return regex_assets
-
-    def scan(self, target_path: Union[str, Path]) -> List[CryptoAsset]:
+    def scan(self, target_path: Union[str, Path], language_filters: Optional[List[str]] = None) -> List[CryptoAsset]:
         """Scan target directory or file and return normalized CryptoAssets."""
         target = Path(target_path)
         effective_root = self.root_dir or (target if target.is_dir() else target.parent)
-        files = self.discover_files(target_path)
+        files = self.discover_files(target_path, language_filters=language_filters)
         all_assets: List[CryptoAsset] = []
 
         for file_path in files:

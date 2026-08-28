@@ -173,3 +173,29 @@ def test_classify_assets_preserves_input_order():
         asset("AES", "symmetric_encryption", key_length=256, mode="GCM"),
     ])
     assert [result.severity for result in results] == [RiskSeverity.HIGH, RiskSeverity.LOW]
+
+def test_classification_failure_isolation():
+    from unittest.mock import patch
+
+    a1 = asset("AES", "symmetric_encryption", key_length=256, mode="GCM")
+
+    a2 = asset("AES", "symmetric_encryption")
+    a2.asset_id = "crypto-crash-me-1234"
+
+    original_classify = classify_asset
+    def mock_classify(a):
+        if a.asset_id == a2.asset_id:
+            raise RuntimeError("Simulated classification failure")
+        return original_classify(a)
+
+    with patch('ecdat.risk.classify_asset', side_effect=mock_classify):
+        results = classify_assets([a1, a2])
+
+    assert len(results) == 2
+
+    # First one succeeded
+    assert results[0].severity == RiskSeverity.LOW
+
+    # Second one produced fallback
+    assert results[1].severity == RiskSeverity.MEDIUM
+    assert "Simulated classification failure" in results[1].reason

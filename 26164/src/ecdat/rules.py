@@ -31,6 +31,7 @@ _SENSITIVE_NAME_TOKENS: Set[str] = {
     "password",
     "passwd",
     "pwd",
+    "pass",
     "token",
 }
 _BENIGN_NAME_TOKENS: Set[str] = {
