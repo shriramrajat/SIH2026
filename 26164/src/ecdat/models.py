@@ -2,7 +2,7 @@
 Internal Data Models for ECDAT Cryptographic Asset Discovery.
 """
 
-from dataclasses import dataclass, asdict
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, Union, List
 from pathlib import Path
 import hashlib
@@ -165,19 +165,18 @@ def normalize_relative_path(file_path: Union[str, Path], root_dir: Optional[Unio
     return path.as_posix()
 
 
-@dataclass
-class Evidence:
+class Evidence(BaseModel):
     """Structured evidence for a discovered cryptographic asset."""
+    file_path: str
+    line_number: int
     code_snippet: str
     detection_mechanism: str  # 'ast', 'regex', 'pem_header'
     matched_rule_id: str
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        return self.model_dump()
 
-
-@dataclass
-class CryptoAsset:
+class CryptoAsset(BaseModel):
     """Represents a discovered cryptographic asset in source code."""
     asset_id: str
     name: str
@@ -225,12 +224,19 @@ class CryptoAsset:
 
         if evidence is None:
             evidence = Evidence(
+                file_path=norm_path,
+                line_number=line_number,
                 code_snippet=redacted_snippet.strip(),
                 detection_mechanism=detection_mechanism,
                 matched_rule_id=matched_rule_id,
             )
         else:
             evidence.code_snippet = _redact_all_secrets_in_text(evidence.code_snippet, language).strip()
+            # Ensure evidence has the correct path and line number
+            if not getattr(evidence, 'file_path', None):
+                evidence.file_path = norm_path
+            if not getattr(evidence, 'line_number', None):
+                evidence.line_number = line_number
 
         if not asset_id:
             raw_key = f"{norm_path}:{line_number}:{algorithm.upper()}:{library.lower()}:{evidence.matched_rule_id}"
@@ -254,6 +260,6 @@ class CryptoAsset:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        d = asdict(self)
+        d = self.model_dump()
         d["code_snippet"] = self.code_snippet
         return d
