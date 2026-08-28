@@ -94,9 +94,10 @@ class CryptoAsset:
     algorithm: str
     file_path: str
     line_number: int
-    code_snippet: str
+    language: str
     library: str
     confidence: float
+    evidence: Evidence
     key_length: Optional[int] = None
     mode: Optional[str] = None
     padding: Optional[str] = None
@@ -157,12 +158,12 @@ This contract defines the exact JSON/Dataclass structure produced by Rohan's sca
 | `asset_id` | `str` | **Required** | Deterministic unique asset identifier string | Available | `f"crypto-{uuid.uuid4().hex[:8]}"` (Needs deterministic SHA-256 hash upgrade) |
 | `file_path` | `str` | **Required** | Normalized relative path from target repo root | Available (Absolute) | `str(file_path)` (Needs `relative_to(root)` normalization) |
 | `line_number` | `int` | **Required** | 1-indexed source line location | Available | `node.lineno` (AST) / line `idx` (Regex) |
-| `language` | `str` | **Required** | Programming language ('python', 'java', 'c', 'cpp', 'pem') | Internal Only | `_determine_language(file_path)` (Not currently exposed on `CryptoAsset`) |
+| `language` | `str` | **Required** | Programming language ('python', 'java', 'c', 'cpp', 'pem') | Available | `_determine_language(file_path)` |
 | `algorithm` | `str` | **Required** | Standardized algorithm identifier (e.g. "RSA", "AES", "SHA-256", "ECC", "ECDH", "MD5") | Available | AST mapping / `RegexRule.algorithm` |
 | `primitive` | `str` | **Required** | CycloneDX-aligned primitive ('symmetric-cipher', 'public-key-encryption', 'message-digest', 'key-exchange', 'digital-signature', 'mac', 'kdf', 'certificate') | Partially Available | Currently stored as coarse `category` ('symmetric_encryption', 'asymmetric_encryption', 'hashing', 'key_exchange', 'certificate_or_key') |
 | `library` | `str` | **Required** | Identified crypto framework/library (e.g., 'PyCryptodome', 'hashlib', 'cryptography', 'javax.crypto', 'OpenSSL') | Available | AST visitor / `RegexRule.library` |
 | `confidence` | `float` | **Required** | Normalized detection confidence score (0.00 to 1.00) | Available | AST score (0.95/0.75), PEM (0.90), Regex (0.80) |
-| `evidence` | `dict` / `Evidence` | **Required** | Nested evidence object containing `code_snippet`, `detection_mechanism`, `matched_rule_id` | Partially Available | `code_snippet` is a top-level string on `CryptoAsset`; mechanism & rule ID are lost |
+| `evidence` | `dict` / `Evidence` | **Required** | Nested evidence object containing `code_snippet`, `detection_mechanism`, `matched_rule_id` | Available | Populated correctly into nested dataclass |
 | `key_size` | `Optional[int]` | **Optional** | Extracted key bit length (e.g., 128, 256, 2048, 4096). Null if unknown/unextracted. | Partially Available | AST positional integer arg / OpenSSL regex name (`EVP_aes_128_cbc`) |
 | `mode` | `Optional[str]` | **Optional** | Block cipher operating mode (e.g., "CBC", "GCM", "ECB", "CTR"). Null if N/A. | Partially Available | AST attribute inspection / Java Cipher string split / OpenSSL regex |
 | `padding` | `Optional[str]` | **Optional** | Padding scheme (e.g., "PKCS5Padding", "OAEP", "PSS"). Null if N/A. | Partially Available | Java Cipher string split |
@@ -297,22 +298,6 @@ This section specifies the strict interface contract guaranteed by Rohan's scann
                     ┌──────────────────────────────────────────┐
                     │      File Discovery Engine (pathlib)     │
                     │   (Filters ext, respects ignore set)     │
-                    └────────────────────┬─────────────────────┘
-                                         │
-                                         ▼
-                    ┌──────────────────────────────────────────┐
-                    │       Language Classifier Engine         │
-                    └────────────────────┬─────────────────────┘
-                                         │
-                 ┌───────────────────────┼───────────────────────┐
-                 │                       │                       │
-                 ▼                       ▼                       ▼
-      ┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
-      │  Python AST Parser  │ │    Java Analyzer    │ │   C/C++ Analyzer    │
-      │ (ast.NodeVisitor)   │ │    (Regex Rules)    │ │    (Regex Rules)    │
-      └──────────┬──────────┘ └──────────┬──────────┘ └──────────┬──────────┘
-                 │                       │                       │
-                 └───────────────────────┼───────────────────────┘
                                          │
                                          ▼
                     ┌──────────────────────────────────────────┐
