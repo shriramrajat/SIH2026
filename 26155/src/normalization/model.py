@@ -94,6 +94,11 @@ class NormalizedConfig:
         (i.e. top-level directives).
     raw_config:
         The original configuration text.  Stored for traceability.
+    source_file:
+        Absolute or relative path to the configuration file that was parsed,
+        or ``None`` when the config was loaded from a string rather than from
+        the filesystem.  Preserved so that compliance findings can reference
+        the file that produced them — required for frontend traceability.
     """
 
     vendor: str
@@ -101,6 +106,7 @@ class NormalizedConfig:
     sections: list[ConfigSection] = field(default_factory=list)
     global_items: list[ConfigItem] = field(default_factory=list)
     raw_config: str = ""
+    source_file: str | None = None
 
     def get_global(self, key: str) -> ConfigItem | None:
         """Return the first global item whose key matches *key*, or ``None``."""
